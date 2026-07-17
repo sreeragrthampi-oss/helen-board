@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>helen-board</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card-bg: #1a1d27;
+    --text: #e5e7eb;
+    --text-dim: #9ca3af;
+    --accent: #6366f1;
+    --border: #2a2e3a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 20px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 24px;
+  }
+  h2.section-title {
+    font-size: 1.1rem;
+    margin: 28px 0 12px;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .chart-card, .list-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .chart-card h3, .list-card h3 {
+    margin: 0 0 12px;
+    font-size: 0.95rem;
+    text-transform: capitalize;
+  }
+  .unit {
+    color: var(--text-dim);
+    font-weight: normal;
+    font-size: 0.8rem;
+  }
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border);
+  }
+  li:last-child { border-bottom: none; }
+  li.done .item-title {
+    color: var(--text-dim);
+    text-decoration: line-through;
+  }
+  .checkbox {
+    font-size: 1.1rem;
+  }
+  .empty-state, .loading-state {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    font-style: italic;
+  }
+  .error-state {
+    color: #f87171;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+  <h1>helen-board</h1>
+  <div class="subtitle">Read-only. Add or edit through Helen via Telegram.</div>
+
+  <h2 class="section-title">Progress</h2>
+  <div id="progress-container" class="loading-state">Loading...</div>
+
+  <h2 class="section-title">Lists</h2>
+  <div id="lists-container" class="loading-state">Loading...</div>
+
+  <script>
+    // ── Configuration ──
+    // Set your Supabase Edge Function URL and token below.
+    const API_URL = "https://xdqhuimgpmkkfstntiyk.supabase.co/functions/v1/helen-board";
+    const TOKEN = "d7c6ag3zwiejrx4m01qphunob2tk9v8f";
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    async function loadDashboard() {
+      const progressContainer = document.getElementById("progress-container");
+      const listsContainer = document.getElementById("lists-container");
+
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`);
+        if (!res.ok) {
+          throw new Error(`Request failed: ${res.status}`);
+        }
+        const data = await res.json();
+        renderProgress(data.progress || {}, progressContainer);
+        renderLists(data.lists || {}, listsContainer);
+      } catch (err) {
+        console.error("Failed to load dashboard data:", err);
+        progressContainer.innerHTML = `<div class="error-state">Couldn't load progress data. Check the console for details.</div>`;
+        listsContainer.innerHTML = `<div class="error-state">Couldn't load list data. Check the console for details.</div>`;
+      }
+    }
+
+    function renderProgress(progressData, container) {
+      const metricNames = Object.keys(progressData).sort();
+
+      if (metricNames.length === 0) {
+        container.innerHTML = `<div class="empty-state">No progress logged yet.</div>`;
+        return;
+      }
+
+      container.innerHTML = "";
+      container.className = "grid";
+
+      metricNames.forEach((metric) => {
+        const entries = progressData[metric];
+        const unit = entries.find((e) => e.unit)?.unit || "";
+
+        const card = document.createElement("div");
+        card.className = "chart-card";
+
+        const canvasId = `chart-${metric.replace(/[^a-z0-9]/gi, "-")}`;
+        card.innerHTML = `
+          <h3>${escapeHtml(metric)}${unit ? ` <span class="unit">(${escapeHtml(unit)})</span>` : ""}</h3>
+          <canvas id="${canvasId}"></canvas>
+        `;
+        container.appendChild(card);
+
+        const ctx = card.querySelector("canvas").getContext("2d");
+        new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: entries.map((e) => e.entry_date),
+            datasets: [{
+              label: metric,
+              data: entries.map((e) => e.value),
+              borderColor: "#6366f1",
+              backgroundColor: "rgba(99, 102, 241, 0.1)",
+              tension: 0.3,
+              fill: true,
+              pointRadius: 4,
+            }],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } },
+          },
+        });
+      });
+    }
+
+    function renderLists(listData, container) {
+      const categoryNames = Object.keys(listData).sort();
+
+      if (categoryNames.length === 0) {
+        container.innerHTML = `<div class="empty-state">No list items yet.</div>`;
+        return;
+      }
+
+      container.innerHTML = "";
+      container.className = "grid";
+
+      categoryNames.forEach((category) => {
+        const items = listData[category];
+        const itemsHtml = items
+          .map(
+            (item) => `
+          <li class="${item.status === "done" ? "done" : ""}">
+            <span class="checkbox">${item.status === "done" ? "☑" : "☐"}</span>
+            <span class="item-title">${escapeHtml(item.title)}</span>
+          </li>`
+          )
+          .join("");
+
+        const card = document.createElement("div");
+        card.className = "list-card";
+        card.innerHTML = `<h3>${escapeHtml(category)}</h3><ul>${itemsHtml}</ul>`;
+        container.appendChild(card);
+      });
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>
