@@ -13,6 +13,8 @@
     --text-dim: #9ca3af;
     --accent: #6366f1;
     --border: #2a2e3a;
+    --danger: #f87171;
+    --success: #4ade80;
   }
   * { box-sizing: border-box; }
   body {
@@ -22,15 +24,8 @@
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
-  h1 {
-    font-size: 1.4rem;
-    margin-bottom: 4px;
-  }
-  .subtitle {
-    color: var(--text-dim);
-    font-size: 0.85rem;
-    margin-bottom: 24px;
-  }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .subtitle { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 24px; }
   h2.section-title {
     font-size: 1.1rem;
     margin: 28px 0 12px;
@@ -43,27 +38,14 @@
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 16px;
   }
-  .chart-card, .list-card {
+  .list-card {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 16px;
   }
-  .chart-card h3, .list-card h3 {
-    margin: 0 0 12px;
-    font-size: 0.95rem;
-    text-transform: capitalize;
-  }
-  .unit {
-    color: var(--text-dim);
-    font-weight: normal;
-    font-size: 0.8rem;
-  }
-  ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
+  .list-card h3 { margin: 0 0 12px; font-size: 0.95rem; text-transform: capitalize; }
+  ul { list-style: none; padding: 0; margin: 0; }
   li {
     display: flex;
     align-items: center;
@@ -73,27 +55,88 @@
     border-bottom: 1px solid var(--border);
   }
   li:last-child { border-bottom: none; }
-  li.done .item-title {
+  li.done .item-title { color: var(--text-dim); text-decoration: line-through; }
+  .checkbox { font-size: 1.1rem; }
+  .empty-state, .loading-state { color: var(--text-dim); font-size: 0.9rem; font-style: italic; }
+  .error-state { color: var(--danger); font-size: 0.9rem; }
+
+  /* Accordion */
+  .accordion { display: flex; flex-direction: column; gap: 8px; }
+  .accordion-item {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .accordion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .accordion-header:hover { background: rgba(99, 102, 241, 0.06); }
+  .accordion-title {
+    font-weight: 600;
+    text-transform: capitalize;
+    font-size: 0.95rem;
+  }
+  .accordion-meta {
     color: var(--text-dim);
-    text-decoration: line-through;
+    font-size: 0.8rem;
+    margin-top: 2px;
   }
-  .checkbox {
-    font-size: 1.1rem;
-  }
-  .empty-state, .loading-state {
+  .accordion-chevron {
     color: var(--text-dim);
+    transition: transform 0.15s ease;
     font-size: 0.9rem;
-    font-style: italic;
   }
-  .error-state {
-    color: #f87171;
-    font-size: 0.9rem;
+  .accordion-item.open .accordion-chevron { transform: rotate(180deg); }
+  .accordion-body {
+    display: none;
+    padding: 0 16px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .accordion-item.open .accordion-body { display: block; }
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+  }
+  .stat-box {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+  .stat-value { font-size: 1.1rem; font-weight: 700; }
+  .stat-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .trend-up { color: var(--success); }
+  .trend-down { color: var(--danger); }
+  .trend-flat { color: var(--text-dim); }
+
+  .consistency-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .consistency-note {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    margin-bottom: 12px;
   }
 </style>
 </head>
 <body>
   <h1>helen-board</h1>
   <div class="subtitle">Read-only. Add or edit through Helen via Telegram.</div>
+
+  <h2 class="section-title">Consistency <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(last 7 days)</span></h2>
+  <div id="consistency-container" class="loading-state">Loading...</div>
 
   <h2 class="section-title">Progress</h2>
   <div id="progress-container" class="loading-state">Loading...</div>
@@ -102,10 +145,11 @@
   <div id="lists-container" class="loading-state">Loading...</div>
 
   <script>
-    // ── Configuration ──
-    // Set your Supabase Edge Function URL and token below.
     const API_URL = "https://xdqhuimgpmkkfstntiyk.supabase.co/functions/v1/helen-board";
     const TOKEN = "d7c6ag3zwiejrx4m01qphunob2tk9v8f";
+
+    let openMetricId = null;
+    const chartInstances = {};
 
     function escapeHtml(s) {
       const div = document.createElement("div");
@@ -113,57 +157,194 @@
       return div.innerHTML;
     }
 
+    function daysAgo(dateStr) {
+      const then = new Date(dateStr + "T00:00:00");
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const diffMs = now - then;
+      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) return "today";
+      if (diffDays === 1) return "1 day ago";
+      return `${diffDays} days ago`;
+    }
+
     async function loadDashboard() {
+      const consistencyContainer = document.getElementById("consistency-container");
       const progressContainer = document.getElementById("progress-container");
       const listsContainer = document.getElementById("lists-container");
 
       try {
         const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`);
-        if (!res.ok) {
-          throw new Error(`Request failed: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         const data = await res.json();
+
+        renderConsistency(data.progress || {}, consistencyContainer);
         renderProgress(data.progress || {}, progressContainer);
         renderLists(data.lists || {}, listsContainer);
       } catch (err) {
         console.error("Failed to load dashboard data:", err);
-        progressContainer.innerHTML = `<div class="error-state">Couldn't load progress data. Check the console for details.</div>`;
-        listsContainer.innerHTML = `<div class="error-state">Couldn't load list data. Check the console for details.</div>`;
+        consistencyContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
+        progressContainer.innerHTML = `<div class="error-state">Couldn't load progress data.</div>`;
+        listsContainer.innerHTML = `<div class="error-state">Couldn't load list data.</div>`;
       }
+    }
+
+    function renderConsistency(progressData, container) {
+      const metricNames = Object.keys(progressData);
+      if (metricNames.length === 0) {
+        container.innerHTML = `<div class="empty-state">No progress logged yet.</div>`;
+        return;
+      }
+
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
+      const counts = metricNames.map((metric) => {
+        const entries = progressData[metric];
+        const recentCount = entries.filter((e) => {
+          const d = new Date(e.entry_date + "T00:00:00");
+          return d >= sevenDaysAgo;
+        }).length;
+        return { metric, count: recentCount };
+      });
+
+      counts.sort((a, b) => a.count - b.count || a.metric.localeCompare(b.metric));
+
+      container.innerHTML = `
+        <div class="consistency-card">
+          <div class="consistency-note">Fewest logs first — these are the ones you're neglecting.</div>
+          <canvas id="consistency-chart"></canvas>
+        </div>
+      `;
+
+      const ctx = document.getElementById("consistency-chart").getContext("2d");
+      new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: counts.map((c) => c.metric),
+          datasets: [{
+            label: "Times logged",
+            data: counts.map((c) => c.count),
+            backgroundColor: counts.map((c) => (c.count === 0 ? "#f87171" : "#6366f1")),
+            borderRadius: 4,
+          }],
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { beginAtZero: true, ticks: { precision: 0 } },
+          },
+        },
+      });
+    }
+
+    function computeStats(entries) {
+      const total = entries.length;
+      const values = entries.map((e) => e.value);
+      const best = Math.max(...values);
+      const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      const lastEntry = entries[entries.length - 1];
+
+      let trend = "flat";
+      if (entries.length >= 2) {
+        const latest = entries[entries.length - 1].value;
+        const priorAvg =
+          entries.slice(0, -1).reduce((a, b) => a + b.value, 0) / (entries.length - 1);
+        if (latest > priorAvg * 1.05) trend = "up";
+        else if (latest < priorAvg * 0.95) trend = "down";
+      }
+
+      return { total, best, avg: Math.round(avg * 10) / 10, lastDate: lastEntry.entry_date, trend };
     }
 
     function renderProgress(progressData, container) {
       const metricNames = Object.keys(progressData).sort();
-
       if (metricNames.length === 0) {
         container.innerHTML = `<div class="empty-state">No progress logged yet.</div>`;
         return;
       }
 
       container.innerHTML = "";
-      container.className = "grid";
+      container.className = "accordion";
 
       metricNames.forEach((metric) => {
         const entries = progressData[metric];
         const unit = entries.find((e) => e.unit)?.unit || "";
+        const stats = computeStats(entries);
+        const metricId = metric.replace(/[^a-z0-9]/gi, "-");
 
-        const card = document.createElement("div");
-        card.className = "chart-card";
+        const item = document.createElement("div");
+        item.className = "accordion-item";
+        item.dataset.metricId = metricId;
 
-        const canvasId = `chart-${metric.replace(/[^a-z0-9]/gi, "-")}`;
-        card.innerHTML = `
-          <h3>${escapeHtml(metric)}${unit ? ` <span class="unit">(${escapeHtml(unit)})</span>` : ""}</h3>
-          <canvas id="${canvasId}"></canvas>
+        const trendSymbol = stats.trend === "up" ? "▲" : stats.trend === "down" ? "▼" : "●";
+        const trendClass = stats.trend === "up" ? "trend-up" : stats.trend === "down" ? "trend-down" : "trend-flat";
+
+        item.innerHTML = `
+          <div class="accordion-header">
+            <div>
+              <div class="accordion-title">${escapeHtml(metric)}</div>
+              <div class="accordion-meta">Logged ${stats.total}× · last ${daysAgo(stats.lastDate)}</div>
+            </div>
+            <div class="accordion-chevron">▾</div>
+          </div>
+          <div class="accordion-body">
+            <div class="stats-row">
+              <div class="stat-box">
+                <div class="stat-value">${stats.total}</div>
+                <div class="stat-label">Logs</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value">${stats.best}${unit ? " " + escapeHtml(unit) : ""}</div>
+                <div class="stat-label">Best</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value">${stats.avg}${unit ? " " + escapeHtml(unit) : ""}</div>
+                <div class="stat-label">Average</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value ${trendClass}">${trendSymbol}</div>
+                <div class="stat-label">Trend</div>
+              </div>
+            </div>
+            <canvas id="chart-${metricId}"></canvas>
+          </div>
         `;
-        container.appendChild(card);
 
-        const ctx = card.querySelector("canvas").getContext("2d");
-        new Chart(ctx, {
+        container.appendChild(item);
+
+        item.querySelector(".accordion-header").addEventListener("click", () => {
+          toggleAccordion(metricId, entries, metric);
+        });
+      });
+    }
+
+    function toggleAccordion(metricId, entries, metricName) {
+      const allItems = document.querySelectorAll(".accordion-item");
+
+      if (openMetricId === metricId) {
+        // Collapse the currently open one
+        document.querySelector(`.accordion-item[data-metric-id="${metricId}"]`).classList.remove("open");
+        openMetricId = null;
+        return;
+      }
+
+      allItems.forEach((el) => el.classList.remove("open"));
+      const target = document.querySelector(`.accordion-item[data-metric-id="${metricId}"]`);
+      target.classList.add("open");
+      openMetricId = metricId;
+
+      if (!chartInstances[metricId]) {
+        const ctx = document.getElementById(`chart-${metricId}`).getContext("2d");
+        chartInstances[metricId] = new Chart(ctx, {
           type: "line",
           data: {
             labels: entries.map((e) => e.entry_date),
             datasets: [{
-              label: metric,
+              label: metricName,
               data: entries.map((e) => e.value),
               borderColor: "#6366f1",
               backgroundColor: "rgba(99, 102, 241, 0.1)",
@@ -178,12 +359,11 @@
             scales: { y: { beginAtZero: true } },
           },
         });
-      });
+      }
     }
 
     function renderLists(listData, container) {
       const categoryNames = Object.keys(listData).sort();
-
       if (categoryNames.length === 0) {
         container.innerHTML = `<div class="empty-state">No list items yet.</div>`;
         return;
