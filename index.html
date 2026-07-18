@@ -33,6 +33,24 @@
     border-bottom: 1px solid var(--border);
     padding-bottom: 6px;
   }
+  h3.category-title {
+    font-size: 0.95rem;
+    margin: 20px 0 8px;
+    color: var(--text);
+    opacity: 0.85;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h3.category-title:first-child { margin-top: 4px; }
+  .category-title::before {
+    content: "";
+    width: 3px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 2px;
+    display: inline-block;
+  }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -61,7 +79,7 @@
   .error-state { color: var(--danger); font-size: 0.9rem; }
 
   /* Accordion */
-  .accordion { display: flex; flex-direction: column; gap: 8px; }
+  .accordion { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
   .accordion-item {
     background: var(--card-bg);
     border: 1px solid var(--border);
@@ -178,6 +196,7 @@
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         const data = await res.json();
 
+        // data.progress is now { category: { metric_name: [entries] } }
         renderConsistency(data.progress || {}, consistencyContainer);
         renderProgress(data.progress || {}, progressContainer);
         renderLists(data.lists || {}, listsContainer);
@@ -189,9 +208,21 @@
       }
     }
 
+    // Flattens { category: { metric: [entries] } } into [{ metric, entries }]
+    // for cross-category views like Consistency.
+    function flattenMetrics(progressData) {
+      const flat = [];
+      for (const category of Object.keys(progressData)) {
+        for (const metric of Object.keys(progressData[category])) {
+          flat.push({ category, metric, entries: progressData[category][metric] });
+        }
+      }
+      return flat;
+    }
+
     function renderConsistency(progressData, container) {
-      const metricNames = Object.keys(progressData);
-      if (metricNames.length === 0) {
+      const flat = flattenMetrics(progressData);
+      if (flat.length === 0) {
         container.innerHTML = `<div class="empty-state">No progress logged yet.</div>`;
         return;
       }
@@ -200,8 +231,7 @@
       sevenDaysAgo.setHours(0, 0, 0, 0);
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
-      const counts = metricNames.map((metric) => {
-        const entries = progressData[metric];
+      const counts = flat.map(({ metric, entries }) => {
         const recentCount = entries.filter((e) => {
           const d = new Date(e.entry_date + "T00:00:00");
           return d >= sevenDaysAgo;
@@ -265,65 +295,77 @@
     }
 
     function renderProgress(progressData, container) {
-      const metricNames = Object.keys(progressData).sort();
-      if (metricNames.length === 0) {
+      const categoryNames = Object.keys(progressData).sort();
+      if (categoryNames.length === 0) {
         container.innerHTML = `<div class="empty-state">No progress logged yet.</div>`;
         return;
       }
 
       container.innerHTML = "";
-      container.className = "accordion";
 
-      metricNames.forEach((metric) => {
-        const entries = progressData[metric];
-        const unit = entries.find((e) => e.unit)?.unit || "";
-        const stats = computeStats(entries);
-        const metricId = metric.replace(/[^a-z0-9]/gi, "-");
+      categoryNames.forEach((category) => {
+        const metricNames = Object.keys(progressData[category]).sort();
 
-        const item = document.createElement("div");
-        item.className = "accordion-item";
-        item.dataset.metricId = metricId;
+        const categoryHeading = document.createElement("h3");
+        categoryHeading.className = "category-title";
+        categoryHeading.textContent = category;
+        container.appendChild(categoryHeading);
 
-        const trendSymbol = stats.trend === "up" ? "▲" : stats.trend === "down" ? "▼" : "●";
-        const trendClass = stats.trend === "up" ? "trend-up" : stats.trend === "down" ? "trend-down" : "trend-flat";
+        const accordion = document.createElement("div");
+        accordion.className = "accordion";
+        container.appendChild(accordion);
 
-        item.innerHTML = `
-          <div class="accordion-header">
-            <div>
-              <div class="accordion-title">${escapeHtml(metric)}</div>
-              <div class="accordion-meta">Logged ${stats.total}× · last ${daysAgo(stats.lastDate)}</div>
+        metricNames.forEach((metric) => {
+          const entries = progressData[category][metric];
+          const unit = entries.find((e) => e.unit)?.unit || "";
+          const stats = computeStats(entries);
+          const metricId = `${category}-${metric}`.replace(/[^a-z0-9]/gi, "-");
+
+          const item = document.createElement("div");
+          item.className = "accordion-item";
+          item.dataset.metricId = metricId;
+
+          const trendSymbol = stats.trend === "up" ? "▲" : stats.trend === "down" ? "▼" : "●";
+          const trendClass = stats.trend === "up" ? "trend-up" : stats.trend === "down" ? "trend-down" : "trend-flat";
+
+          item.innerHTML = `
+            <div class="accordion-header">
+              <div>
+                <div class="accordion-title">${escapeHtml(metric)}</div>
+                <div class="accordion-meta">Logged ${stats.total}× · last ${daysAgo(stats.lastDate)}</div>
+              </div>
+              <div class="accordion-chevron">▾</div>
             </div>
-            <div class="accordion-chevron">▾</div>
-          </div>
-          <div class="accordion-body">
-            <div class="stats-row">
-              <div class="stat-box">
-                <div class="stat-value">${stats.total}</div>
-                <div class="stat-label">Logs</div>
+            <div class="accordion-body">
+              <div class="stats-row">
+                <div class="stat-box">
+                  <div class="stat-value">${stats.total}</div>
+                  <div class="stat-label">Logs</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-value">${stats.best}${unit ? " " + escapeHtml(unit) : ""}</div>
+                  <div class="stat-label">Best</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-value">${stats.avg}${unit ? " " + escapeHtml(unit) : ""}</div>
+                  <div class="stat-label">Average</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-value ${trendClass}">${trendSymbol}</div>
+                  <div class="stat-label">Trend</div>
+                </div>
               </div>
-              <div class="stat-box">
-                <div class="stat-value">${stats.best}${unit ? " " + escapeHtml(unit) : ""}</div>
-                <div class="stat-label">Best</div>
-              </div>
-              <div class="stat-box">
-                <div class="stat-value">${stats.avg}${unit ? " " + escapeHtml(unit) : ""}</div>
-                <div class="stat-label">Average</div>
-              </div>
-              <div class="stat-box">
-                <div class="stat-value ${trendClass}">${trendSymbol}</div>
-                <div class="stat-label">Trend</div>
+              <div style="height: 220px;">
+                <canvas id="chart-${metricId}"></canvas>
               </div>
             </div>
-            <div style="height: 220px;">
-              <canvas id="chart-${metricId}"></canvas>
-            </div>
-          </div>
-        `;
+          `;
 
-        container.appendChild(item);
+          accordion.appendChild(item);
 
-        item.querySelector(".accordion-header").addEventListener("click", () => {
-          toggleAccordion(metricId, entries, metric);
+          item.querySelector(".accordion-header").addEventListener("click", () => {
+            toggleAccordion(metricId, entries, metric);
+          });
         });
       });
     }
@@ -332,7 +374,6 @@
       const allItems = document.querySelectorAll(".accordion-item");
 
       if (openMetricId === metricId) {
-        // Collapse the currently open one
         document.querySelector(`.accordion-item[data-metric-id="${metricId}"]`).classList.remove("open");
         openMetricId = null;
         return;
