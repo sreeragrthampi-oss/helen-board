@@ -173,11 +173,34 @@
     text-align: right;
     flex-shrink: 0;
   }
+
+  .blocks-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .block-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .block-item:last-child { border-bottom: none; }
+  .block-icon { font-size: 1rem; flex-shrink: 0; }
+  .block-item.done .block-title { color: var(--text-dim); text-decoration: line-through; }
+  .block-item.skipped .block-title { color: var(--text-dim); text-decoration: line-through; }
+  .block-item.current .block-title { color: var(--accent); font-weight: 600; }
 </style>
 </head>
 <body>
   <h1>helen-board</h1>
   <div class="subtitle">Read-only. Add or edit through Helen via Telegram.</div>
+
+  <h2 class="section-title">Blocks <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(today)</span></h2>
+  <div id="blocks-container" class="loading-state">Loading...</div>
 
   <h2 class="section-title">Upcoming</h2>
   <div id="upcoming-container" class="loading-state">Loading...</div>
@@ -216,6 +239,7 @@
     }
 
     async function loadDashboard() {
+      const blocksContainer = document.getElementById("blocks-container");
       const upcomingContainer = document.getElementById("upcoming-container");
       const consistencyContainer = document.getElementById("consistency-container");
       const progressContainer = document.getElementById("progress-container");
@@ -226,17 +250,40 @@
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         const data = await res.json();
 
+        renderBlocks(data.blocks || [], blocksContainer);
         renderUpcoming(data.reminders || [], data.events || [], upcomingContainer);
         renderConsistency(data.progress || {}, consistencyContainer);
         renderProgress(data.progress || {}, progressContainer);
         renderLists(data.lists || {}, listsContainer);
       } catch (err) {
         console.error("Failed to load dashboard data:", err);
+        blocksContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         upcomingContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         consistencyContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         progressContainer.innerHTML = `<div class="error-state">Couldn't load progress data.</div>`;
         listsContainer.innerHTML = `<div class="error-state">Couldn't load list data.</div>`;
       }
+    }
+
+    const BLOCK_ICONS = { done: "✅", current: "▶️", skipped: "⏭️", pending: "⬜" };
+
+    function renderBlocks(blocks, container) {
+      if (blocks.length === 0) {
+        container.innerHTML = `<div class="empty-state">No blocks set for today yet.</div>`;
+        return;
+      }
+
+      const itemsHtml = blocks
+        .map(
+          (b) => `
+        <div class="block-item ${escapeHtml(b.status)}">
+          <div class="block-icon">${BLOCK_ICONS[b.status] || "⬜"}</div>
+          <div class="block-title">${escapeHtml(b.title)}</div>
+        </div>`
+        )
+        .join("");
+
+      container.innerHTML = `<div class="blocks-card">${itemsHtml}</div>`;
     }
 
     function formatRelativeTime(dateObj) {
