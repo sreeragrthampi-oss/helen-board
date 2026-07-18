@@ -147,11 +147,40 @@
     font-size: 0.8rem;
     margin-bottom: 12px;
   }
+
+  .upcoming-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .upcoming-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .upcoming-item:last-child { border-bottom: none; }
+  .upcoming-icon { font-size: 1.1rem; flex-shrink: 0; }
+  .upcoming-body { flex: 1; min-width: 0; }
+  .upcoming-title { font-size: 0.9rem; font-weight: 500; }
+  .upcoming-meta { font-size: 0.78rem; color: var(--text-dim); margin-top: 1px; }
+  .upcoming-when {
+    font-size: 0.78rem;
+    color: var(--accent);
+    white-space: nowrap;
+    text-align: right;
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body>
   <h1>helen-board</h1>
   <div class="subtitle">Read-only. Add or edit through Helen via Telegram.</div>
+
+  <h2 class="section-title">Upcoming</h2>
+  <div id="upcoming-container" class="loading-state">Loading...</div>
 
   <h2 class="section-title">Consistency <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(last 7 days)</span></h2>
   <div id="consistency-container" class="loading-state">Loading...</div>
@@ -187,6 +216,7 @@
     }
 
     async function loadDashboard() {
+      const upcomingContainer = document.getElementById("upcoming-container");
       const consistencyContainer = document.getElementById("consistency-container");
       const progressContainer = document.getElementById("progress-container");
       const listsContainer = document.getElementById("lists-container");
@@ -196,16 +226,84 @@
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         const data = await res.json();
 
-        // data.progress is now { category: { metric_name: [entries] } }
+        renderUpcoming(data.reminders || [], data.events || [], upcomingContainer);
         renderConsistency(data.progress || {}, consistencyContainer);
         renderProgress(data.progress || {}, progressContainer);
         renderLists(data.lists || {}, listsContainer);
       } catch (err) {
         console.error("Failed to load dashboard data:", err);
+        upcomingContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         consistencyContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         progressContainer.innerHTML = `<div class="error-state">Couldn't load progress data.</div>`;
         listsContainer.innerHTML = `<div class="error-state">Couldn't load list data.</div>`;
       }
+    }
+
+    function formatRelativeTime(dateObj) {
+      const now = new Date();
+      const diffMs = dateObj - now;
+      const diffMins = Math.round(diffMs / 60000);
+      const diffHours = Math.round(diffMs / 3600000);
+      const diffDays = Math.round(diffMs / 86400000);
+
+      if (diffMins < 60 && diffMins >= 0) return `in ${diffMins}m`;
+      if (diffMins < 0 && diffMins > -60) return `${-diffMins}m ago`;
+      if (diffHours < 24 && diffHours >= 1) return `in ${diffHours}h`;
+      if (diffHours < 0 && diffHours > -24) return `${-diffHours}h ago`;
+      if (diffDays >= 1) return `in ${diffDays}d`;
+      if (diffDays <= -1) return `${-diffDays}d ago`;
+      return "now";
+    }
+
+    function renderUpcoming(reminders, events, container) {
+      const items = [];
+
+      reminders.forEach((r) => {
+        items.push({
+          type: "reminder",
+          icon: "⏰",
+          title: r.text,
+          date: new Date(r.remind_at),
+          meta: new Date(r.remind_at).toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata",
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
+        });
+      });
+
+      events.forEach((e) => {
+        items.push({
+          type: "event",
+          icon: "📅",
+          title: e.title,
+          date: new Date(e.event_date + "T00:00:00"),
+          meta: e.event_date + (e.notes ? ` · ${e.notes}` : ""),
+        });
+      });
+
+      if (items.length === 0) {
+        container.innerHTML = `<div class="empty-state">Nothing upcoming.</div>`;
+        return;
+      }
+
+      items.sort((a, b) => a.date - b.date);
+
+      const itemsHtml = items
+        .map(
+          (item) => `
+        <div class="upcoming-item">
+          <div class="upcoming-icon">${item.icon}</div>
+          <div class="upcoming-body">
+            <div class="upcoming-title">${escapeHtml(item.title)}</div>
+            <div class="upcoming-meta">${escapeHtml(item.meta)}</div>
+          </div>
+          <div class="upcoming-when">${escapeHtml(formatRelativeTime(item.date))}</div>
+        </div>`
+        )
+        .join("");
+
+      container.innerHTML = `<div class="upcoming-card">${itemsHtml}</div>`;
     }
 
     // Flattens { category: { metric: [entries] } } into [{ metric, entries }]
