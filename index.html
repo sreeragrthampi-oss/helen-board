@@ -193,6 +193,86 @@
   .block-item.done .block-title { color: var(--text-dim); text-decoration: line-through; }
   .block-item.skipped .block-title { color: var(--text-dim); text-decoration: line-through; }
   .block-item.current .block-title { color: var(--accent); font-weight: 600; }
+
+  .week-wrapper {
+    display: flex;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .week-gutter {
+    position: relative;
+    width: 44px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--card-bg);
+  }
+  .week-gutter-label {
+    position: absolute;
+    right: 6px;
+    transform: translateY(-50%);
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .week-scroll {
+    display: flex;
+    overflow-x: auto;
+    flex: 1;
+  }
+  .day-column {
+    width: 220px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+  }
+  .day-column:last-child { border-right: none; }
+  .day-column.is-today .day-header { color: var(--accent); font-weight: 700; }
+  .day-header {
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+  }
+  .day-timeline {
+    position: relative;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      var(--border) 0,
+      var(--border) 1px,
+      transparent 1px,
+      transparent 60px
+    );
+  }
+  .timed-block {
+    position: absolute;
+    background: rgba(99, 102, 241, 0.25);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 0.72rem;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .timed-block .tb-title { font-weight: 600; line-height: 1.15; }
+  .timed-block .tb-time { color: var(--text-dim); font-size: 0.65rem; }
+  .timed-block.status-done { opacity: 0.5; text-decoration: line-through; }
+  .flexible-list {
+    padding: 8px 10px;
+    border-top: 1px solid var(--border);
+  }
+  .flexible-list .flex-empty {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    font-style: italic;
+  }
+  .flexible-item {
+    font-size: 0.78rem;
+    padding: 3px 0;
+  }
+  .flexible-item.done { color: var(--text-dim); text-decoration: line-through; }
 </style>
 </head>
 <body>
@@ -201,6 +281,9 @@
 
   <h2 class="section-title">Blocks <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(today)</span></h2>
   <div id="blocks-container" class="loading-state">Loading...</div>
+
+  <h2 class="section-title">Week <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(scroll to see more days)</span></h2>
+  <div id="week-container" class="loading-state">Loading...</div>
 
   <h2 class="section-title">Upcoming</h2>
   <div id="upcoming-container" class="loading-state">Loading...</div>
@@ -240,6 +323,7 @@
 
     async function loadDashboard() {
       const blocksContainer = document.getElementById("blocks-container");
+      const weekContainer = document.getElementById("week-container");
       const upcomingContainer = document.getElementById("upcoming-container");
       const consistencyContainer = document.getElementById("consistency-container");
       const progressContainer = document.getElementById("progress-container");
@@ -251,6 +335,7 @@
         const data = await res.json();
 
         renderBlocks(data.blocks || [], blocksContainer);
+        renderWeek(data.weekBlocks || {}, weekContainer);
         renderUpcoming(data.reminders || [], data.events || [], upcomingContainer);
         renderConsistency(data.progress || {}, consistencyContainer);
         renderProgress(data.progress || {}, progressContainer);
@@ -258,6 +343,7 @@
       } catch (err) {
         console.error("Failed to load dashboard data:", err);
         blocksContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
+        weekContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         upcomingContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         consistencyContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         progressContainer.innerHTML = `<div class="error-state">Couldn't load progress data.</div>`;
@@ -284,6 +370,177 @@
         .join("");
 
       container.innerHTML = `<div class="blocks-card">${itemsHtml}</div>`;
+    }
+
+    function timeToMinutes(t) {
+      // t looks like "06:00:00" or "06:00"
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + m;
+    }
+
+    // Assigns each timed block a lane (for side-by-side placement) and the
+    // total lane count for its overlapping cluster, so clashing blocks sit
+    // next to each other instead of on top of one another.
+    function layoutOverlaps(blocks) {
+      const sorted = [...blocks].sort((a, b) => a._start - b._start || a._end - b._end);
+      const clusters = [];
+      let current = [];
+      let clusterMaxEnd = -Infinity;
+
+      for (const b of sorted) {
+        if (current.length && b._start >= clusterMaxEnd) {
+          clusters.push(current);
+          current = [];
+          clusterMaxEnd = -Infinity;
+        }
+        current.push(b);
+        clusterMaxEnd = Math.max(clusterMaxEnd, b._end);
+      }
+      if (current.length) clusters.push(current);
+
+      for (const cluster of clusters) {
+        const laneEnds = [];
+        for (const b of cluster) {
+          let placed = false;
+          for (let i = 0; i < laneEnds.length; i++) {
+            if (laneEnds[i] <= b._start) {
+              b._lane = i;
+              laneEnds[i] = b._end;
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            b._lane = laneEnds.length;
+            laneEnds.push(b._end);
+          }
+        }
+        for (const b of cluster) b._totalLanes = laneEnds.length;
+      }
+      return sorted;
+    }
+
+    function renderWeek(weekBlocksData, container) {
+      const dates = Object.keys(weekBlocksData).sort();
+
+      // Determine a shared time range across the whole week so every day
+      // column lines up against the same hour gutter.
+      let rangeStartMin = null;
+      let rangeEndMin = null;
+      for (const date of dates) {
+        for (const b of weekBlocksData[date]) {
+          if (!b.scheduled_time) continue;
+          const s = timeToMinutes(b.scheduled_time);
+          const e = b.end_time ? timeToMinutes(b.end_time) : s + 60;
+          if (rangeStartMin === null || s < rangeStartMin) rangeStartMin = s;
+          if (rangeEndMin === null || e > rangeEndMin) rangeEndMin = e;
+        }
+      }
+      if (rangeStartMin === null) {
+        rangeStartMin = 5 * 60; // 5am default
+        rangeEndMin = 22 * 60; // 10pm default
+      } else {
+        rangeStartMin = Math.max(0, Math.floor((rangeStartMin - 60) / 60) * 60);
+        rangeEndMin = Math.min(24 * 60, Math.ceil((rangeEndMin + 60) / 60) * 60);
+      }
+      const pxPerMin = 1;
+      const timelineHeight = (rangeEndMin - rangeStartMin) * pxPerMin;
+
+      // Build a rolling 7-day range even if some days have zero blocks, so
+      // "swipe for more" always has 7 columns to scroll through.
+      const todayStr = dates.length ? dates[0] : null;
+      const allDates = [];
+      const base = todayStr ? new Date(todayStr + "T00:00:00") : new Date();
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(base);
+        d.setDate(d.getDate() + i);
+        allDates.push(d.toISOString().split("T")[0]);
+      }
+
+      const gutterLabels = [];
+      for (let m = rangeStartMin; m <= rangeEndMin; m += 60) {
+        gutterLabels.push(`<div class="week-gutter-label" style="top:${(m - rangeStartMin) * pxPerMin}px;">${formatHourLabel(m)}</div>`);
+      }
+
+      const todayIso = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+      const dayColumnsHtml = allDates
+        .map((dateStr) => {
+          const dayBlocks = weekBlocksData[dateStr] || [];
+          const timed = dayBlocks
+            .filter((b) => b.scheduled_time)
+            .map((b) => ({
+              ...b,
+              _start: timeToMinutes(b.scheduled_time),
+              _end: b.end_time ? timeToMinutes(b.end_time) : timeToMinutes(b.scheduled_time) + 60,
+            }));
+          const flexible = dayBlocks.filter((b) => !b.scheduled_time);
+
+          layoutOverlaps(timed);
+
+          const timedHtml = timed
+            .map((b) => {
+              const top = (b._start - rangeStartMin) * pxPerMin;
+              const height = Math.max(20, (b._end - b._start) * pxPerMin);
+              const widthPct = 100 / b._totalLanes;
+              const leftPct = b._lane * widthPct;
+              const statusClass = b.status === "done" ? "status-done" : "";
+              return `
+              <div class="timed-block ${statusClass}" style="top:${top}px; height:${height}px; left:${leftPct}%; width:calc(${widthPct}% - 4px);">
+                <div class="tb-title">${escapeHtml(b.title)}</div>
+                <div class="tb-time">${formatTime12hShort(b.scheduled_time)}</div>
+              </div>`;
+            })
+            .join("");
+
+          const flexibleHtml = flexible.length
+            ? flexible
+                .map(
+                  (b) =>
+                    `<div class="flexible-item ${b.status === "done" ? "done" : ""}">${BLOCK_ICONS[b.status] || "⬜"} ${escapeHtml(b.title)}</div>`
+                )
+                .join("")
+            : `<div class="flex-empty">No flexible blocks</div>`;
+
+          const dateObj = new Date(dateStr + "T00:00:00");
+          const label = dateObj.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+          const isToday = dateStr === todayIso;
+
+          return `
+          <div class="day-column ${isToday ? "is-today" : ""}">
+            <div class="day-header">${label}</div>
+            <div class="day-timeline" style="height:${timelineHeight}px;">${timedHtml}</div>
+            <div class="flexible-list">${flexibleHtml}</div>
+          </div>`;
+        })
+        .join("");
+
+      container.innerHTML = `
+        <div class="week-wrapper">
+          <div class="week-gutter" style="height:${timelineHeight + 34}px;">
+            <div style="height:34px;"></div>
+            ${gutterLabels.join("")}
+          </div>
+          <div class="week-scroll">${dayColumnsHtml}</div>
+        </div>
+      `;
+    }
+
+    function formatHourLabel(minutes) {
+      let h = Math.floor(minutes / 60) % 24;
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12;
+      if (h === 0) h = 12;
+      return `${h}${ampm}`;
+    }
+
+    function formatTime12hShort(time24) {
+      const [hStr, mStr] = time24.split(":");
+      let h = parseInt(hStr, 10);
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12;
+      if (h === 0) h = 12;
+      return mStr === "00" ? `${h}${ampm}` : `${h}:${mStr}${ampm}`;
     }
 
     function formatRelativeTime(dateObj) {
