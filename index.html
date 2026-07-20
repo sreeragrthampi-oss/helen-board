@@ -446,11 +446,14 @@
       const pxPerMin = 1;
       const timelineHeight = (rangeEndMin - rangeStartMin) * pxPerMin;
 
-      // Build a rolling 7-day range even if some days have zero blocks, so
-      // "swipe for more" always has 7 columns to scroll through.
-      const todayStr = dates.length ? dates[0] : null;
+      const todayIso = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+      // Build a rolling 7-day range starting from TODAY specifically — never
+      // inferred from the data itself, since a stray block dated before
+      // today (leftover test data, etc.) would otherwise shift the whole
+      // week a day early.
       const allDates = [];
-      const base = todayStr ? new Date(todayStr + "T00:00:00") : new Date();
+      const base = new Date(todayIso + "T00:00:00");
       for (let i = 0; i < 7; i++) {
         const d = new Date(base);
         d.setDate(d.getDate() + i);
@@ -461,8 +464,6 @@
       for (let m = rangeStartMin; m <= rangeEndMin; m += 60) {
         gutterLabels.push(`<div class="week-gutter-label" style="top:${(m - rangeStartMin) * pxPerMin}px;">${formatHourLabel(m)}</div>`);
       }
-
-      const todayIso = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
       const dayColumnsHtml = allDates
         .map((dateStr) => {
