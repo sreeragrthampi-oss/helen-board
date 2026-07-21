@@ -260,8 +260,11 @@
   .timed-block .tb-time { color: var(--text-dim); font-size: 0.65rem; }
   .timed-block.status-done { opacity: 0.5; text-decoration: line-through; }
   .flexible-list {
-    padding: 8px 10px;
+    padding: 6px 8px;
     border-bottom: 1px solid var(--border);
+    height: 56px;
+    overflow-y: auto;
+    box-sizing: border-box;
   }
   .flexible-list .flex-empty {
     color: var(--text-dim);
@@ -527,8 +530,8 @@
 
       container.innerHTML = `
         <div class="week-wrapper">
-          <div class="week-gutter" style="height:${timelineHeight + 34}px;">
-            <div style="height:34px;"></div>
+          <div class="week-gutter" style="height:${timelineHeight + 34 + 56}px;">
+            <div style="height:${34 + 56}px;"></div>
             ${gutterLabels.join("")}
           </div>
           <div class="week-scroll">${dayColumnsHtml}</div>
