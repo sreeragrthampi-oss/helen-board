@@ -261,7 +261,7 @@
   .timed-block.status-done { opacity: 0.5; text-decoration: line-through; }
   .flexible-list {
     padding: 8px 10px;
-    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
   }
   .flexible-list .flex-empty {
     color: var(--text-dim);
@@ -519,8 +519,8 @@
           return `
           <div class="day-column ${isToday ? "is-today" : ""}">
             <div class="day-header">${label}</div>
-            <div class="day-timeline" style="height:${timelineHeight}px;">${timedHtml}</div>
             <div class="flexible-list">${flexibleHtml}</div>
+            <div class="day-timeline" style="height:${timelineHeight}px;">${timedHtml}</div>
           </div>`;
         })
         .join("");
