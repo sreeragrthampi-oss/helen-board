@@ -174,6 +174,23 @@
     flex-shrink: 0;
   }
 
+  .rightnow-card {
+    background: var(--card-bg);
+    border: 1px solid #f59e0b;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .rightnow-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .rightnow-item:last-child { border-bottom: none; }
+  .rightnow-item .rightnow-title { flex: 1; }
+
   .blocks-card {
     background: var(--card-bg);
     border: 1px solid var(--border);
@@ -291,6 +308,9 @@
   <h1>helen-board</h1>
   <div class="subtitle">Read-only. Add or edit through Helen via Telegram.</div>
 
+  <h2 class="section-title" style="color:#f59e0b;">⚡ Right Now</h2>
+  <div id="rightnow-container" class="loading-state">Loading...</div>
+
   <h2 class="section-title">Blocks <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(today)</span></h2>
   <div id="blocks-container" class="loading-state">Loading...</div>
 
@@ -334,6 +354,7 @@
     }
 
     async function loadDashboard() {
+      const rightNowContainer = document.getElementById("rightnow-container");
       const blocksContainer = document.getElementById("blocks-container");
       const weekContainer = document.getElementById("week-container");
       const upcomingContainer = document.getElementById("upcoming-container");
@@ -346,6 +367,7 @@
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         const data = await res.json();
 
+        renderRightNow(data.lists || {}, rightNowContainer);
         renderBlocks(data.blocks || [], blocksContainer);
         renderWeek(data.weekBlocks || {}, weekContainer);
         renderUpcoming(data.reminders || [], data.events || [], upcomingContainer);
@@ -354,6 +376,7 @@
         renderLists(data.lists || {}, listsContainer);
       } catch (err) {
         console.error("Failed to load dashboard data:", err);
+        rightNowContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         blocksContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         weekContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
         upcomingContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
@@ -361,6 +384,28 @@
         progressContainer.innerHTML = `<div class="error-state">Couldn't load progress data.</div>`;
         listsContainer.innerHTML = `<div class="error-state">Couldn't load list data.</div>`;
       }
+    }
+
+    // "Right Now" is a dedicated, always-fixed category (set only via the
+    // "Right now:" Telegram trigger — never freely chosen by the
+    // classifier), so it's rendered here in its own prominent panel at the
+    // very top of the page rather than mixed into the general Lists grid.
+    function renderRightNow(listData, container) {
+      const items = (listData["Right Now"] || []).filter((i) => i.status !== "done");
+      if (items.length === 0) {
+        container.innerHTML = `<div class="empty-state">Nothing urgent right now.</div>`;
+        return;
+      }
+      const itemsHtml = items
+        .map(
+          (item) => `
+        <div class="rightnow-item">
+          <span class="checkbox">☐</span>
+          <span class="rightnow-title">${escapeHtml(item.title)}</span>
+        </div>`
+        )
+        .join("");
+      container.innerHTML = `<div class="rightnow-card">${itemsHtml}</div>`;
     }
 
     const BLOCK_ICONS = { done: "✅", current: "▶️", skipped: "⏭️", pending: "⬜" };
@@ -833,7 +878,9 @@
     }
 
     function renderLists(listData, container) {
-      const categoryNames = Object.keys(listData).sort();
+      const categoryNames = Object.keys(listData)
+        .filter((c) => c !== "Right Now")
+        .sort();
       if (categoryNames.length === 0) {
         container.innerHTML = `<div class="empty-state">No list items yet.</div>`;
         return;
