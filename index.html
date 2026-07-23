@@ -472,9 +472,17 @@
         allDates.push(d.toISOString().split("T")[0]);
       }
 
+      // Blocks sit below the day-header (~34px) and the fixed-height
+      // flexible-list area (56px) within each day column. The gutter labels
+      // are absolutely positioned, so they must have this same offset baked
+      // into their own "top" — an empty spacer div here does NOT push down
+      // absolutely-positioned siblings, which was the source of the
+      // previous "labels don't line up with blocks" bug.
+      const GUTTER_TOP_OFFSET = 34 + 56; // day-header height + flexible-list height
+
       const gutterLabels = [];
       for (let m = rangeStartMin; m <= rangeEndMin; m += 60) {
-        gutterLabels.push(`<div class="week-gutter-label" style="top:${(m - rangeStartMin) * pxPerMin}px;">${formatHourLabel(m)}</div>`);
+        gutterLabels.push(`<div class="week-gutter-label" style="top:${(m - rangeStartMin) * pxPerMin + GUTTER_TOP_OFFSET}px;">${formatHourLabel(m)}</div>`);
       }
 
       const dayColumnsHtml = allDates
@@ -530,8 +538,7 @@
 
       container.innerHTML = `
         <div class="week-wrapper">
-          <div class="week-gutter" style="height:${timelineHeight + 34 + 56}px;">
-            <div style="height:${34 + 56}px;"></div>
+          <div class="week-gutter" style="height:${timelineHeight + GUTTER_TOP_OFFSET}px;">
             ${gutterLabels.join("")}
           </div>
           <div class="week-scroll">${dayColumnsHtml}</div>
