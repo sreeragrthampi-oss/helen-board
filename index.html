@@ -316,6 +316,19 @@
     opacity: 0.5;
     cursor: default;
   }
+  .delete-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-left: auto;
+    opacity: 0.5;
+    line-height: 1;
+  }
+  .delete-btn:hover { opacity: 1; color: var(--danger); }
+  .delete-btn:disabled { opacity: 0.3; cursor: default; }
 </style>
 </head>
 <body>
@@ -380,6 +393,29 @@
         console.error("Failed to mark item done:", err);
         btn.disabled = false;
         btn.textContent = "☐";
+      }
+    }
+
+    async function deleteListItem(event, itemId, itemTitle) {
+      if (!confirm(`Delete "${itemTitle}"? This can't be undone.`)) return;
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete_item", id: itemId }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const li = btn.closest("li");
+        if (li) li.remove();
+        const ul = btn.closest("ul");
+        if (ul && !ul.querySelector("li")) {
+          ul.closest(".list-card")?.remove();
+        }
+      } catch (err) {
+        console.error("Failed to delete item:", err);
+        btn.disabled = false;
       }
     }
 
@@ -975,6 +1011,9 @@
               ? `<span class="checkbox">☑</span>`
               : `<button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'list')">☐</button>`}
             <span class="item-title">${escapeHtml(item.title)}</span>
+            ${item.status === "done"
+              ? `<button class="delete-btn" title="Delete" onclick="deleteListItem(event, '${item.id}', '${escapeHtml(item.title).replace(/'/g, "\\'")}')">🗑</button>`
+              : ""}
           </li>`
           )
           .join("");
