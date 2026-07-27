@@ -302,6 +302,20 @@
     background: rgba(255,255,255,0.03);
     border-color: var(--border);
   }
+  button.checkbox {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-size: 1.1rem;
+    color: inherit;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  button.checkbox:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
 </style>
 </head>
 <body>
@@ -335,6 +349,63 @@
 
     let openMetricId = null;
     const chartInstances = {};
+    let blocksData = [];
+
+    async function markListItemDone(event, itemId, context) {
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      btn.textContent = "…";
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list_item_done", id: itemId }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (context === "rightnow") {
+          const row = btn.closest(".rightnow-item");
+          if (row) row.remove();
+          const card = document.querySelector(".rightnow-card");
+          if (card && !card.querySelector(".rightnow-item")) {
+            document.getElementById("rightnow-container").innerHTML = `<div class="empty-state">Nothing urgent right now.</div>`;
+          }
+        } else {
+          const li = btn.closest("li");
+          if (li) {
+            li.classList.add("done");
+            btn.outerHTML = `<span class="checkbox">☑</span>`;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to mark item done:", err);
+        btn.disabled = false;
+        btn.textContent = "☐";
+      }
+    }
+
+    async function markBlockDone(event, blockId) {
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "block_done", id: blockId }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const result = await res.json();
+        const doneBlock = blocksData.find((b) => b.id === blockId);
+        if (doneBlock) doneBlock.status = "done";
+        if (result.next) {
+          const nextBlock = blocksData.find((b) => b.title === result.next && b.status === "pending");
+          if (nextBlock) nextBlock.status = "current";
+        }
+        renderBlocks(blocksData, document.getElementById("blocks-container"));
+      } catch (err) {
+        console.error("Failed to mark block done:", err);
+        btn.disabled = false;
+      }
+    }
 
     function escapeHtml(s) {
       const div = document.createElement("div");
@@ -399,8 +470,8 @@
       const itemsHtml = items
         .map(
           (item) => `
-        <div class="rightnow-item">
-          <span class="checkbox">☐</span>
+        <div class="rightnow-item" data-item-id="${item.id}">
+          <button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'rightnow')">☐</button>
           <span class="rightnow-title">${escapeHtml(item.title)}</span>
         </div>`
         )
@@ -411,19 +482,24 @@
     const BLOCK_ICONS = { done: "✅", current: "▶️", skipped: "⏭️", pending: "⬜" };
 
     function renderBlocks(blocks, container) {
+      blocksData = blocks;
       if (blocks.length === 0) {
         container.innerHTML = `<div class="empty-state">No blocks set for today yet.</div>`;
         return;
       }
 
       const itemsHtml = blocks
-        .map(
-          (b) => `
-        <div class="block-item ${escapeHtml(b.status)}">
-          <div class="block-icon">${BLOCK_ICONS[b.status] || "⬜"}</div>
+        .map((b) => {
+          const canComplete = b.status === "current" || b.status === "pending";
+          const iconEl = canComplete
+            ? `<button class="checkbox" title="Mark done" onclick="markBlockDone(event, '${b.id}')">${BLOCK_ICONS[b.status] || "⬜"}</button>`
+            : `<div class="block-icon">${BLOCK_ICONS[b.status] || "⬜"}</div>`;
+          return `
+        <div class="block-item ${escapeHtml(b.status)}" data-block-id="${b.id}">
+          ${iconEl}
           <div class="block-title">${escapeHtml(b.title)}</div>
-        </div>`
-        )
+        </div>`;
+        })
         .join("");
 
       container.innerHTML = `<div class="blocks-card">${itemsHtml}</div>`;
@@ -895,7 +971,9 @@
           .map(
             (item) => `
           <li class="${item.status === "done" ? "done" : ""}">
-            <span class="checkbox">${item.status === "done" ? "☑" : "☐"}</span>
+            ${item.status === "done"
+              ? `<span class="checkbox">☑</span>`
+              : `<button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'list')">☐</button>`}
             <span class="item-title">${escapeHtml(item.title)}</span>
           </li>`
           )
