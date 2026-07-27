@@ -391,6 +391,41 @@
   .add-category-form button[type="submit"]:hover { opacity: 0.85; }
   .new-category-card { border-style: dashed; opacity: 0.7; }
   .new-category-card:hover { opacity: 1; }
+  .block-delete-popup {
+    position: fixed;
+    z-index: 1000;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px;
+    min-width: 180px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  }
+  .block-delete-popup-title {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    padding: 4px 6px 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+  }
+  .block-delete-popup button {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 7px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .block-delete-popup button:hover { background: rgba(255,255,255,0.06); }
+  .block-delete-popup button.danger { color: var(--danger); }
 </style>
 </head>
 <body>
@@ -520,6 +555,76 @@
       if (diffDays === 0) return "today";
       if (diffDays === 1) return "1 day ago";
       return `${diffDays} days ago`;
+    }
+
+    let _popupBlockId = null;
+    let _popupChipEl = null;
+
+    function _getOrCreateBlockPopup() {
+      let popup = document.getElementById('block-delete-popup');
+      if (popup) return popup;
+      popup = document.createElement('div');
+      popup.id = 'block-delete-popup';
+      popup.className = 'block-delete-popup';
+      popup.style.display = 'none';
+      popup.innerHTML = `
+        <div class="block-delete-popup-title" id="block-popup-title"></div>
+        <button id="block-popup-delete-one">Delete this one</button>
+        <button id="block-popup-delete-all" class="danger">Delete all future</button>`;
+      document.body.appendChild(popup);
+      document.getElementById('block-popup-delete-one').addEventListener('click', async () => {
+        const id = _popupBlockId, chip = _popupChipEl;
+        _hideBlockPopup();
+        if (!id) return;
+        try {
+          const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete_block", id }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (chip) chip.remove();
+        } catch (err) { console.error("Failed to delete block:", err); }
+      });
+      document.getElementById('block-popup-delete-all').addEventListener('click', async () => {
+        const id = _popupBlockId, chip = _popupChipEl;
+        _hideBlockPopup();
+        if (!id) return;
+        try {
+          const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete_block_recurring", id }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (chip) chip.remove();
+        } catch (err) { console.error("Failed to delete recurring blocks:", err); }
+      });
+      return popup;
+    }
+
+    function showBlockDeletePopup(x, y, blockId, blockTitle, chipEl) {
+      _popupBlockId = blockId;
+      _popupChipEl = chipEl;
+      const popup = _getOrCreateBlockPopup();
+      document.getElementById('block-popup-title').textContent = blockTitle;
+      popup.style.left = Math.min(x, window.innerWidth - 196) + 'px';
+      popup.style.top = Math.min(y, window.innerHeight - 116) + 'px';
+      popup.style.display = 'block';
+      setTimeout(() => document.addEventListener('click', _dismissBlockPopupOutside), 0);
+    }
+
+    function _dismissBlockPopupOutside(e) {
+      const popup = document.getElementById('block-delete-popup');
+      if (popup && !popup.contains(e.target)) _hideBlockPopup();
+    }
+
+    function _hideBlockPopup() {
+      const popup = document.getElementById('block-delete-popup');
+      if (popup) popup.style.display = 'none';
+      document.removeEventListener('click', _dismissBlockPopupOutside);
+      _popupBlockId = null;
+      _popupChipEl = null;
     }
 
     async function addRightNowItem(event) {
@@ -875,7 +980,7 @@
               const leftPct = b._lane * widthPct;
               const statusClass = b.status === "done" ? "status-done" : "";
               return `
-              <div class="timed-block ${statusClass}" style="top:${top}px; height:${height}px; left:${leftPct}%; width:calc(${widthPct}% - 4px);">
+              <div class="timed-block ${statusClass}" data-block-id="${b.id}" data-block-title="${escapeHtml(b.title)}" style="top:${top}px; height:${height}px; left:${leftPct}%; width:calc(${widthPct}% - 4px);">
                 <div class="tb-title">${escapeHtml(b.title)}</div>
                 <div class="tb-time">${formatTime12hShort(b.scheduled_time)}</div>
               </div>`;
@@ -886,7 +991,7 @@
             ? flexible
                 .map(
                   (b) =>
-                    `<div class="flexible-item ${b.status === "done" ? "done" : ""}">${BLOCK_ICONS[b.status] || "⬜"} ${escapeHtml(b.title)}</div>`
+                    `<div class="flexible-item ${b.status === "done" ? "done" : ""}" data-block-id="${b.id}" data-block-title="${escapeHtml(b.title)}">${BLOCK_ICONS[b.status] || "⬜"} ${escapeHtml(b.title)}</div>`
                 )
                 .join("")
             : `<div class="flex-empty">No flexible blocks</div>`;
@@ -912,6 +1017,15 @@
           <div class="week-scroll">${dayColumnsHtml}</div>
         </div>
       `;
+      if (!container.dataset.contextmenuBound) {
+        container.dataset.contextmenuBound = "1";
+        container.addEventListener('contextmenu', (e) => {
+          const chip = e.target.closest('[data-block-id]');
+          if (!chip) return;
+          e.preventDefault();
+          showBlockDeletePopup(e.clientX, e.clientY, chip.dataset.blockId, chip.dataset.blockTitle, chip);
+        });
+      }
     }
 
     function formatHourLabel(minutes) {
