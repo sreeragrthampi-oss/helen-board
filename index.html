@@ -329,6 +329,21 @@
   }
   .delete-btn:hover { opacity: 1; color: var(--danger); }
   .delete-btn:disabled { opacity: 0.3; cursor: default; }
+  .list-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .list-chevron {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    transition: transform 0.15s ease;
+  }
+  .list-card.open .list-chevron { transform: rotate(180deg); }
+  .list-card .list-body { display: none; }
+  .list-card.open .list-body { display: block; padding-top: 12px; }
 </style>
 </head>
 <body>
@@ -999,7 +1014,7 @@
       }
 
       container.innerHTML = "";
-      container.className = "grid";
+      container.className = "accordion";
 
       categoryNames.forEach((category) => {
         const items = listData[category];
@@ -1020,7 +1035,12 @@
 
         const card = document.createElement("div");
         card.className = "list-card";
-        card.innerHTML = `<h3>${escapeHtml(category)}</h3><ul>${itemsHtml}</ul>`;
+        card.innerHTML = `
+          <div class="list-card-header" onclick="this.closest('.list-card').classList.toggle('open')">
+            <h3 style="margin:0">${escapeHtml(category)}</h3>
+            <span class="list-chevron">▾</span>
+          </div>
+          <div class="list-body"><ul>${itemsHtml}</ul></div>`;
         container.appendChild(card);
       });
     }
