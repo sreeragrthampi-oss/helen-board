@@ -39,3 +39,14 @@ export async function markBlockDoneById(
   }
   return { done: block.title, next: next?.title ?? null };
 }
+
+export async function deleteListItemById(
+  supabase: SupabaseClient,
+  itemId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("list_items")
+    .delete()
+    .eq("id", itemId);
+  if (error) throw error;
+}

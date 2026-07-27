@@ -5,7 +5,7 @@
 // rewritten to text/plain), so the API/UI split lives here instead.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { markListItemDoneById, markBlockDoneById } from "../_shared/db.ts";
+import { markListItemDoneById, markBlockDoneById, deleteListItemById } from "../_shared/db.ts";
 
 const PROGRESS_ACCESS_TOKEN = Deno.env.get("PROGRESS_ACCESS_TOKEN")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -64,6 +64,14 @@ Deno.serve(async (req) => {
       if (action === "block_done") {
         const result = await markBlockDoneById(supabase, id);
         return new Response(JSON.stringify({ ok: true, ...result }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
+      if (action === "delete_item") {
+        await deleteListItemById(supabase, id);
+        return new Response(JSON.stringify({ ok: true }), {
           status: 200,
           headers: { "Content-Type": "application/json", ...CORS_HEADERS },
         });
