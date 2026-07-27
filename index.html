@@ -344,6 +344,53 @@
   .list-card.open .list-chevron { transform: rotate(180deg); }
   .list-card .list-body { display: none; }
   .list-card.open .list-body { display: block; padding-top: 12px; }
+  .delete-category-btn {
+    background: none; border: none; padding: 0;
+    cursor: pointer; font-size: 0.85rem;
+    color: var(--text-dim); opacity: 0.4; line-height: 1;
+  }
+  .delete-category-btn:hover { opacity: 1; color: var(--danger); }
+  .add-item-form { display: flex; gap: 6px; padding: 10px 0 2px; }
+  .add-item-form input[type="text"] {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+    outline: none;
+  }
+  .add-item-form input[type="text"]:focus { border-color: var(--accent); }
+  .add-item-form button[type="submit"] {
+    background: var(--accent); border: none; border-radius: 6px;
+    padding: 6px 12px; color: #fff; font-size: 0.9rem;
+    cursor: pointer; font-weight: 600;
+  }
+  .add-item-form button[type="submit"]:hover { opacity: 0.85; }
+  .add-item-form button[type="submit"]:disabled { opacity: 0.5; cursor: default; }
+  .rightnow-form { border-top: 1px solid var(--border); padding: 10px 16px 12px; }
+  .rightnow-empty { color: var(--text-dim); font-size: 0.9rem; font-style: italic; padding: 12px 16px; }
+  .add-category-form { display: flex; gap: 6px; flex-wrap: wrap; }
+  .add-category-form input[type="text"] {
+    flex: 1; min-width: 100px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+    outline: none;
+  }
+  .add-category-form input[type="text"]:focus { border-color: var(--accent); }
+  .add-category-form button[type="submit"] {
+    background: var(--accent); border: none; border-radius: 6px;
+    padding: 6px 12px; color: #fff; font-size: 0.9rem;
+    cursor: pointer; font-weight: 600;
+  }
+  .add-category-form button[type="submit"]:hover { opacity: 0.85; }
+  .new-category-card { border-style: dashed; opacity: 0.7; }
+  .new-category-card:hover { opacity: 1; }
 </style>
 </head>
 <body>
@@ -475,6 +522,152 @@
       return `${diffDays} days ago`;
     }
 
+    async function addRightNowItem(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const input = form.querySelector("input[type='text']");
+      const title = input.value.trim();
+      if (!title) return;
+      const btn = form.querySelector("button[type='submit']");
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add_right_now", title }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const item = await res.json();
+        const card = form.closest(".rightnow-card");
+        const emptyEl = card.querySelector(".rightnow-empty");
+        if (emptyEl) emptyEl.remove();
+        const div = document.createElement("div");
+        div.className = "rightnow-item";
+        div.dataset.itemId = item.id;
+        div.innerHTML = `
+          <button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'rightnow')">☐</button>
+          <span class="rightnow-title">${escapeHtml(item.title)}</span>`;
+        card.insertBefore(div, form);
+        input.value = "";
+      } catch (err) {
+        console.error("Failed to add Right Now item:", err);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function addListItem(event, category) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const input = form.querySelector("input[type='text']");
+      const title = input.value.trim();
+      if (!title) return;
+      const btn = form.querySelector("button[type='submit']");
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add_list_item", category, title }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const item = await res.json();
+        const ul = form.closest(".list-body").querySelector("ul");
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'list')">☐</button>
+          <span class="item-title">${escapeHtml(item.title)}</span>`;
+        ul.appendChild(li);
+        input.value = "";
+      } catch (err) {
+        console.error("Failed to add list item:", err);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function addNewCategory(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const categoryInput = form.querySelector("input[name='category']");
+      const titleInput = form.querySelector("input[name='itemTitle']");
+      const category = categoryInput.value.trim();
+      const title = titleInput.value.trim();
+      if (!category || !title) return;
+      const btn = form.querySelector("button[type='submit']");
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add_list_item", category, title }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const item = await res.json();
+        const container = document.getElementById("lists-container");
+        const newCatCard = container.querySelector(".new-category-card");
+        const escapedCat = escapeHtml(category);
+        const safeCat = escapedCat.replace(/'/g, "\\'");
+        const card = document.createElement("div");
+        card.className = "list-card open";
+        card.dataset.category = category;
+        card.innerHTML = `
+          <div class="list-card-header" onclick="this.closest('.list-card').classList.toggle('open')">
+            <h3 style="margin:0">${escapedCat}</h3>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="delete-category-btn" title="Delete category"
+                onclick="deleteCategoryConfirm(event, '${safeCat}')">🗑</button>
+              <span class="list-chevron">▾</span>
+            </div>
+          </div>
+          <div class="list-body" style="display:block;padding-top:12px">
+            <ul>
+              <li>
+                <button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'list')">☐</button>
+                <span class="item-title">${escapeHtml(title)}</span>
+              </li>
+            </ul>
+            <form class="add-item-form" onsubmit="addListItem(event, '${safeCat}')">
+              <input type="text" placeholder="Add item…" required />
+              <button type="submit">+</button>
+            </form>
+          </div>`;
+        container.insertBefore(card, newCatCard);
+        categoryInput.value = "";
+        titleInput.value = "";
+      } catch (err) {
+        console.error("Failed to create category:", err);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function deleteCategoryConfirm(event, category) {
+      event.stopPropagation();
+      const card = event.target.closest(".list-card");
+      const itemCount = card ? card.querySelectorAll("ul li").length : 0;
+      const input = prompt(
+        `Type "${category}" to permanently delete this category and all ${itemCount} item${itemCount !== 1 ? "s" : ""}. This cannot be undone.`
+      );
+      if (input === null) return;
+      if (input !== category) {
+        alert(`Did not match — expected exactly: ${category}`);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete_category", category }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (card) card.remove();
+      } catch (err) {
+        console.error("Failed to delete category:", err);
+        alert("Something went wrong — check the console.");
+      }
+    }
+
     async function loadDashboard() {
       const rightNowContainer = document.getElementById("rightnow-container");
       const blocksContainer = document.getElementById("blocks-container");
@@ -514,10 +707,6 @@
     // very top of the page rather than mixed into the general Lists grid.
     function renderRightNow(listData, container) {
       const items = (listData["Right Now"] || []).filter((i) => i.status !== "done");
-      if (items.length === 0) {
-        container.innerHTML = `<div class="empty-state">Nothing urgent right now.</div>`;
-        return;
-      }
       const itemsHtml = items
         .map(
           (item) => `
@@ -527,7 +716,14 @@
         </div>`
         )
         .join("");
-      container.innerHTML = `<div class="rightnow-card">${itemsHtml}</div>`;
+      container.innerHTML = `
+        <div class="rightnow-card">
+          ${itemsHtml || `<div class="rightnow-empty">Nothing urgent right now.</div>`}
+          <form class="add-item-form rightnow-form" onsubmit="addRightNowItem(event)">
+            <input type="text" placeholder="Add urgent item…" required />
+            <button type="submit">+</button>
+          </form>
+        </div>`;
     }
 
     const BLOCK_ICONS = { done: "✅", current: "▶️", skipped: "⏭️", pending: "⬜" };
@@ -1008,16 +1204,14 @@
       const categoryNames = Object.keys(listData)
         .filter((c) => c !== "Right Now")
         .sort();
-      if (categoryNames.length === 0) {
-        container.innerHTML = `<div class="empty-state">No list items yet.</div>`;
-        return;
-      }
 
       container.innerHTML = "";
       container.className = "accordion";
 
       categoryNames.forEach((category) => {
         const items = listData[category];
+        const escapedCat = escapeHtml(category);
+        const safeCat = escapedCat.replace(/'/g, "\\'");
         const itemsHtml = items
           .map(
             (item) => `
@@ -1035,14 +1229,40 @@
 
         const card = document.createElement("div");
         card.className = "list-card";
+        card.dataset.category = category;
         card.innerHTML = `
           <div class="list-card-header" onclick="this.closest('.list-card').classList.toggle('open')">
-            <h3 style="margin:0">${escapeHtml(category)}</h3>
-            <span class="list-chevron">▾</span>
+            <h3 style="margin:0">${escapedCat}</h3>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="delete-category-btn" title="Delete category"
+                onclick="deleteCategoryConfirm(event, '${safeCat}')">🗑</button>
+              <span class="list-chevron">▾</span>
+            </div>
           </div>
-          <div class="list-body"><ul>${itemsHtml}</ul></div>`;
+          <div class="list-body">
+            <ul>${itemsHtml}</ul>
+            <form class="add-item-form" onsubmit="addListItem(event, '${safeCat}')">
+              <input type="text" placeholder="Add item…" required />
+              <button type="submit">+</button>
+            </form>
+          </div>`;
         container.appendChild(card);
       });
+
+      const newCatCard = document.createElement("div");
+      newCatCard.className = "list-card new-category-card";
+      newCatCard.innerHTML = `
+        <div class="list-card-header" style="cursor:default">
+          <h3 style="margin:0;color:var(--text-dim)">New category</h3>
+        </div>
+        <div class="list-body" style="display:block;padding-top:12px">
+          <form class="add-category-form" onsubmit="addNewCategory(event)">
+            <input type="text" name="category" placeholder="Category name…" required />
+            <input type="text" name="itemTitle" placeholder="First item…" required />
+            <button type="submit">+</button>
+          </form>
+        </div>`;
+      container.appendChild(newCatCard);
     }
 
     loadDashboard();
