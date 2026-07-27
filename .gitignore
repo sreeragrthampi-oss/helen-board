@@ -1,0 +1,8 @@
+# Supabase CLI temp files
+supabase/.temp/
+
+# Nested git repo — tracked separately at sreeragrthampi-oss/helen-board
+helen-board-page-live/
+
+# Claude Code local settings
+.claude/
