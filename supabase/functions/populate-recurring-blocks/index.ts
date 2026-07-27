@@ -84,23 +84,6 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Linked reminder, same pattern as manual fixed-time blocks — but
-      // check for an existing one first to avoid duplicate pings on reruns.
-      const remindAt = `${dateStr}T${routine.scheduled_time}+05:30`;
-      const { data: existingReminder } = await supabase
-        .from("reminders")
-        .select("id")
-        .eq("text", routine.title)
-        .eq("remind_at", remindAt)
-        .limit(1);
-
-      if (!existingReminder || existingReminder.length === 0) {
-        await supabase.from("reminders").insert({
-          text: routine.title,
-          remind_at: remindAt,
-        });
-      }
-
       results.created++;
     }
   }

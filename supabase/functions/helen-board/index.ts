@@ -158,7 +158,8 @@ async function getRemindersData(): Promise<{ text: string; remind_at: string }[]
     .from("reminders")
     .select("text, remind_at")
     .eq("delivered", false)
-    .order("remind_at", { ascending: true });
+    .order("remind_at", { ascending: true })
+    .limit(15);
 
   if (error) throw error;
   return (data ?? []).map((r) => ({ text: r.text, remind_at: r.remind_at }));
@@ -170,7 +171,8 @@ async function getEventsData(): Promise<{ title: string; event_date: string; not
     .from("events")
     .select("title, event_date, notes")
     .gte("event_date", todayIST)
-    .order("event_date", { ascending: true });
+    .order("event_date", { ascending: true })
+    .limit(15);
 
   if (error) throw error;
   return (data ?? []).map((e) => ({ title: e.title, event_date: e.event_date, notes: e.notes }));
