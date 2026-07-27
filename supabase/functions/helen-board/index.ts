@@ -5,7 +5,7 @@
 // rewritten to text/plain), so the API/UI split lives here instead.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { markListItemDoneById, markBlockDoneById, deleteListItemById } from "../_shared/db.ts";
+import { markListItemDoneById, markBlockDoneById, deleteListItemById, createListItem, deleteCategory } from "../_shared/db.ts";
 
 const PROGRESS_ACCESS_TOKEN = Deno.env.get("PROGRESS_ACCESS_TOKEN")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -38,10 +38,10 @@ Deno.serve(async (req) => {
   if (req.method === "POST") {
     try {
       const body = await req.json();
-      const { action, id } = body;
+      const { action, id, category, title } = body;
 
-      if (!action || !id) {
-        return new Response(JSON.stringify({ error: "missing action or id" }), {
+      if (!action) {
+        return new Response(JSON.stringify({ error: "missing action" }), {
           status: 400,
           headers: { "Content-Type": "application/json", ...CORS_HEADERS },
         });
@@ -71,6 +71,48 @@ Deno.serve(async (req) => {
 
       if (action === "delete_item") {
         await deleteListItemById(supabase, id);
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
+      if (action === "add_list_item") {
+        if (!category || !title) {
+          return new Response(JSON.stringify({ error: "missing category or title" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+          });
+        }
+        const item = await createListItem(supabase, category.trim(), title.trim());
+        return new Response(JSON.stringify({ ok: true, id: item.id, title: item.title, category: item.category }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
+      if (action === "add_right_now") {
+        if (!title) {
+          return new Response(JSON.stringify({ error: "missing title" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+          });
+        }
+        const item = await createListItem(supabase, "Right Now", title.trim());
+        return new Response(JSON.stringify({ ok: true, id: item.id, title: item.title, category: item.category }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
+      if (action === "delete_category") {
+        if (!category) {
+          return new Response(JSON.stringify({ error: "missing category" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+          });
+        }
+        await deleteCategory(supabase, category);
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
           headers: { "Content-Type": "application/json", ...CORS_HEADERS },

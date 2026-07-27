@@ -50,3 +50,35 @@ export async function deleteListItemById(
     .eq("id", itemId);
   if (error) throw error;
 }
+
+export async function createListItem(
+  supabase: SupabaseClient,
+  category: string,
+  title: string,
+): Promise<{ id: string; title: string; category: string }> {
+  const { data: existing } = await supabase
+    .from("list_items")
+    .select("position")
+    .eq("category", category)
+    .order("position", { ascending: false })
+    .limit(1);
+  const nextPosition = existing && existing.length > 0 ? existing[0].position + 1 : 0;
+  const { data, error } = await supabase
+    .from("list_items")
+    .insert({ category, title, position: nextPosition })
+    .select("id, title, category")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCategory(
+  supabase: SupabaseClient,
+  category: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("list_items")
+    .delete()
+    .eq("category", category);
+  if (error) throw error;
+}
