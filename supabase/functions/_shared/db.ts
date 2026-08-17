@@ -82,3 +82,63 @@ export async function deleteCategory(
     .eq("category", category);
   if (error) throw error;
 }
+
+export async function deleteBlockById(
+  supabase: SupabaseClient,
+  blockId: string,
+): Promise<void> {
+  const { error } = await supabase.from("blocks").delete().eq("id", blockId);
+  if (error) throw error;
+}
+
+export async function deleteBlockRecurring(
+  supabase: SupabaseClient,
+  blockId: string,
+): Promise<{ wasRecurring: boolean }> {
+  const { data: block } = await supabase
+    .from("blocks")
+    .select("title, scheduled_time")
+    .eq("id", blockId)
+    .single();
+
+  if (!block) return { wasRecurring: false };
+
+  // Flexible blocks (no scheduled_time) can't be recurring — just delete
+  if (block.scheduled_time) {
+    const { data: routines } = await supabase
+      .from("recurring_blocks")
+      .select("id")
+      .eq("active", true)
+      .eq("title", block.title)
+      .eq("scheduled_time", block.scheduled_time)
+      .limit(1);
+
+    const match = routines?.[0] ?? null;
+
+    if (match) {
+      const today = getDateIST();
+      await supabase.from("recurring_blocks").update({ active: false }).eq("id", match.id);
+      await supabase
+        .from("blocks")
+        .delete()
+        .eq("title", block.title)
+        .eq("scheduled_time", block.scheduled_time)
+        .gte("block_date", today);
+      await supabase
+        .from("reminders")
+        .delete()
+        .eq("text", block.title)
+        .eq("delivered", false)
+        .gte("remind_at", `${today}T00:00:00+05:30`);
+      return { wasRecurring: true };
+    }
+  }
+
+  await supabase.from("blocks").delete().eq("id", blockId);
+  return { wasRecurring: false };
+}
+
+function getDateIST(): string {
+  const now = new Date();
+  return new Date(now.getTime() + 5.5 * 60 * 60 * 1000).toISOString().split("T")[0];
+}

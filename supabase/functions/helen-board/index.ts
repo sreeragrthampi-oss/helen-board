@@ -5,7 +5,7 @@
 // rewritten to text/plain), so the API/UI split lives here instead.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { markListItemDoneById, markBlockDoneById, deleteListItemById, createListItem, deleteCategory } from "../_shared/db.ts";
+import { markListItemDoneById, markBlockDoneById, deleteListItemById, createListItem, deleteCategory, deleteBlockById, deleteBlockRecurring } from "../_shared/db.ts";
 
 const PROGRESS_ACCESS_TOKEN = Deno.env.get("PROGRESS_ACCESS_TOKEN")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -119,6 +119,34 @@ Deno.serve(async (req) => {
         });
       }
 
+      if (action === "delete_block") {
+        if (!id) {
+          return new Response(JSON.stringify({ error: "missing id" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+          });
+        }
+        await deleteBlockById(supabase, id);
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
+      if (action === "delete_block_recurring") {
+        if (!id) {
+          return new Response(JSON.stringify({ error: "missing id" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+          });
+        }
+        const result = await deleteBlockRecurring(supabase, id);
+        return new Response(JSON.stringify({ ok: true, wasRecurring: result.wasRecurring }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
       return new Response(JSON.stringify({ error: "unknown action" }), {
         status: 400,
         headers: { "Content-Type": "application/json", ...CORS_HEADERS },
@@ -133,15 +161,16 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const [progress, lists, reminders, events, blocks, weekBlocks] = await Promise.all([
+    const [progress, lists, reminders, events, blocks, weekBlocks, journalDraft] = await Promise.all([
       getProgressData(),
       getListData(),
       getRemindersData(),
       getEventsData(),
       getBlocksData(),
       getWeekBlocksData(),
+      getJournalDraftData(),
     ]);
-    return new Response(JSON.stringify({ progress, lists, reminders, events, blocks, weekBlocks }), {
+    return new Response(JSON.stringify({ progress, lists, reminders, events, blocks, weekBlocks, journalDraft }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
@@ -233,6 +262,7 @@ async function getBlocksData(): Promise<{ id: string; title: string; status: str
 }
 
 type WeekBlock = {
+  id: string;
   title: string;
   status: string;
   scheduled_time: string | null;
@@ -247,7 +277,7 @@ async function getWeekBlocksData(): Promise<WeekBlocksByDate> {
 
   const { data, error } = await supabase
     .from("blocks")
-    .select("title, status, block_date, scheduled_time, end_time, position")
+    .select("id, title, status, block_date, scheduled_time, end_time, position")
     .gte("block_date", todayIST)
     .lte("block_date", endDate)
     .order("block_date", { ascending: true })
@@ -259,6 +289,7 @@ async function getWeekBlocksData(): Promise<WeekBlocksByDate> {
   for (const row of data ?? []) {
     if (!grouped[row.block_date]) grouped[row.block_date] = [];
     grouped[row.block_date].push({
+      id: row.id,
       title: row.title,
       status: row.status,
       scheduled_time: row.scheduled_time,
@@ -273,6 +304,17 @@ function addDaysIST(dateStr: string, days: number): string {
   const d = new Date(dateStr + "T00:00:00");
   d.setDate(d.getDate() + days);
   return d.toISOString().split("T")[0];
+}
+
+async function getJournalDraftData(): Promise<string> {
+  const { data, error } = await supabase
+    .from("journal_draft")
+    .select("content")
+    .eq("id", 1)
+    .single();
+
+  if (error) return "";
+  return data?.content ?? "";
 }
 
 function getTodayIST(): string {

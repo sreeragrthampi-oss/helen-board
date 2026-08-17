@@ -20,10 +20,13 @@ const CHECKLIST = `🔔 Reset check:
 4. Pray a little
 5. Charge gadgets — phone, earbuds, scooter
 6. Clean the room a little
-7. Check calendar
+7. Blocks check, tick
 8. Check Google Tasks
-9. Journal the last hour in a few words
-10. Any fleeting notes? Capture them now
+9. Journal the last hour in a few words, thriller, revise it
+10. Any fleeting notes? stories? Capture them now
+11. Momentum, small wins
+12. 90 days, sacrifices
+13. Slow
 
 Keep the momentum. Move with urgency. Stay fluid. Win the next hour — small wins matter.`;
 
