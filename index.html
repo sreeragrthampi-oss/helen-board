@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>helen-board</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card-bg: #1a1d27;
+    --text: #e5e7eb;
+    --text-dim: #9ca3af;
+    --accent: #6366f1;
+    --border: #2a2e3a;
+    --danger: #f87171;
+    --success: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 20px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .subtitle { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 24px; }
+  h2.section-title {
+    font-size: 1.1rem;
+    margin: 28px 0 12px;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+  h3.category-title {
+    font-size: 0.95rem;
+    margin: 20px 0 8px;
+    color: var(--text);
+    opacity: 0.85;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h3.category-title:first-child { margin-top: 4px; }
+  .category-title::before {
+    content: "";
+    width: 3px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 2px;
+    display: inline-block;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .list-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .list-card h3 { margin: 0 0 12px; font-size: 0.95rem; text-transform: capitalize; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border);
+  }
+  li:last-child { border-bottom: none; }
+  li.done .item-title { color: var(--text-dim); text-decoration: line-through; }
+  .checkbox { font-size: 1.1rem; }
+  .empty-state, .loading-state { color: var(--text-dim); font-size: 0.9rem; font-style: italic; }
+  .error-state { color: var(--danger); font-size: 0.9rem; }
+
+  /* Accordion */
+  .accordion { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+  .accordion-item {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .accordion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .accordion-header:hover { background: rgba(99, 102, 241, 0.06); }
+  .accordion-title {
+    font-weight: 600;
+    text-transform: capitalize;
+    font-size: 0.95rem;
+  }
+  .accordion-meta {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    margin-top: 2px;
+  }
+  .accordion-chevron {
+    color: var(--text-dim);
+    transition: transform 0.15s ease;
+    font-size: 0.9rem;
+  }
+  .accordion-item.open .accordion-chevron { transform: rotate(180deg); }
+  .accordion-body {
+    display: none;
+    padding: 0 16px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .accordion-item.open .accordion-body { display: block; }
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+  }
+  .stat-box {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+  .stat-value { font-size: 1.1rem; font-weight: 700; }
+  .stat-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .trend-up { color: var(--success); }
+  .trend-down { color: var(--danger); }
+  .trend-flat { color: var(--text-dim); }
+
+  .consistency-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .consistency-note {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    margin-bottom: 12px;
+  }
+
+  .upcoming-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .upcoming-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .upcoming-item:last-child { border-bottom: none; }
+  .upcoming-icon { font-size: 1.1rem; flex-shrink: 0; }
+  .upcoming-body { flex: 1; min-width: 0; }
+  .upcoming-title { font-size: 0.9rem; font-weight: 500; }
+  .upcoming-meta { font-size: 0.78rem; color: var(--text-dim); margin-top: 1px; }
+  .upcoming-when {
+    font-size: 0.78rem;
+    color: var(--accent);
+    white-space: nowrap;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .rightnow-card {
+    background: var(--card-bg);
+    border: 1px solid #f59e0b;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .rightnow-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .rightnow-item:last-child { border-bottom: none; }
+  .rightnow-item .rightnow-title { flex: 1; }
+
+  .blocks-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .block-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .block-item:last-child { border-bottom: none; }
+  .block-icon { font-size: 1rem; flex-shrink: 0; }
+  .block-item.done .block-title { color: var(--text-dim); text-decoration: line-through; }
+  .block-item.skipped .block-title { color: var(--text-dim); text-decoration: line-through; }
+  .block-item.current .block-title { color: var(--accent); font-weight: 600; }
+
+  .week-wrapper {
+    display: flex;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .week-gutter {
+    position: relative;
+    width: 44px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--card-bg);
+  }
+  .week-gutter-label {
+    position: absolute;
+    right: 6px;
+    transform: translateY(-50%);
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .week-scroll {
+    display: flex;
+    overflow-x: auto;
+    flex: 1;
+  }
+  .day-column {
+    width: 220px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+  }
+  .day-column:last-child { border-right: none; }
+  .day-column.is-today .day-header { color: var(--accent); font-weight: 700; }
+  .day-header {
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+  }
+  .day-timeline {
+    position: relative;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      var(--border) 0,
+      var(--border) 1px,
+      transparent 1px,
+      transparent 60px
+    );
+  }
+  .timed-block {
+    position: absolute;
+    background: rgba(99, 102, 241, 0.25);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 0.72rem;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .timed-block .tb-title { font-weight: 600; line-height: 1.15; }
+  .timed-block .tb-time { color: var(--text-dim); font-size: 0.65rem; }
+  .timed-block.status-done { opacity: 0.5; text-decoration: line-through; }
+  .flexible-list {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    height: 56px;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+  .flexible-list .flex-empty {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    font-style: italic;
+  }
+  .flexible-item {
+    font-size: 0.78rem;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+  }
+  .flexible-item.done {
+    color: var(--text-dim);
+    text-decoration: line-through;
+    background: rgba(255,255,255,0.03);
+    border-color: var(--border);
+  }
+  button.checkbox {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-size: 1.1rem;
+    color: inherit;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  button.checkbox:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .delete-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-left: auto;
+    opacity: 0.5;
+    line-height: 1;
+  }
+  .delete-btn:hover { opacity: 1; color: var(--danger); }
+  .delete-btn:disabled { opacity: 0.3; cursor: default; }
+  .list-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .list-chevron {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    transition: transform 0.15s ease;
+  }
+  .list-card.open .list-chevron { transform: rotate(180deg); }
+  .list-card .list-body { display: none; }
+  .list-card.open .list-body { display: block; padding-top: 12px; }
+  .delete-category-btn {
+    background: none; border: none; padding: 0;
+    cursor: pointer; font-size: 0.85rem;
+    color: var(--text-dim); opacity: 0.4; line-height: 1;
+  }
+  .delete-category-btn:hover { opacity: 1; color: var(--danger); }
+  .add-item-form { display: flex; gap: 6px; padding: 10px 0 2px; }
+  .add-item-form input[type="text"] {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+    outline: none;
+  }
+  .add-item-form input[type="text"]:focus { border-color: var(--accent); }
+  .add-item-form button[type="submit"] {
+    background: var(--accent); border: none; border-radius: 6px;
+    padding: 6px 12px; color: #fff; font-size: 0.9rem;
+    cursor: pointer; font-weight: 600;
+  }
+  .add-item-form button[type="submit"]:hover { opacity: 0.85; }
+  .add-item-form button[type="submit"]:disabled { opacity: 0.5; cursor: default; }
+  .rightnow-form { border-top: 1px solid var(--border); padding: 10px 16px 12px; }
+  .rightnow-empty { color: var(--text-dim); font-size: 0.9rem; font-style: italic; padding: 12px 16px; }
+  .add-category-form { display: flex; gap: 6px; flex-wrap: wrap; }
+  .add-category-form input[type="text"] {
+    flex: 1; min-width: 100px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+    outline: none;
+  }
+  .add-category-form input[type="text"]:focus { border-color: var(--accent); }
+  .add-category-form button[type="submit"] {
+    background: var(--accent); border: none; border-radius: 6px;
+    padding: 6px 12px; color: #fff; font-size: 0.9rem;
+    cursor: pointer; font-weight: 600;
+  }
+  .add-category-form button[type="submit"]:hover { opacity: 0.85; }
+  .new-category-card { border-style: dashed; opacity: 0.7; }
+  .new-category-card:hover { opacity: 1; }
+  .block-delete-popup {
+    position: fixed;
+    z-index: 1000;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px;
+    min-width: 180px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  }
+  .block-delete-popup-title {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    padding: 4px 6px 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+  }
+  .block-delete-popup button {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 7px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .block-delete-popup button:hover { background: rgba(255,255,255,0.06); }
+  .block-delete-popup button.danger { color: var(--danger); }
+</style>
+</head>
+<body>
+  <h1>helen-board</h1>
+  <div class="subtitle">Read-only. Add or edit through Helen via Telegram.</div>
+
+  <h2 class="section-title" style="color:#f59e0b;">⚡ Right Now</h2>
+  <div id="rightnow-container" class="loading-state">Loading...</div>
+
+  <h2 class="section-title">Blocks <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(today)</span></h2>
+  <div id="blocks-container" class="loading-state">Loading...</div>
+
+  <h2 class="section-title">Week <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(scroll to see more days)</span></h2>
+  <div id="week-container" class="loading-state">Loading...</div>
+
+  <h2 class="section-title">Upcoming</h2>
+  <div id="upcoming-container" class="loading-state">Loading...</div>
+
+  <h2 class="section-title">Consistency <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(last 7 days)</span></h2>
+  <div id="consistency-container" class="loading-state">Loading...</div>
+
+  <h2 class="section-title">Progress</h2>
+  <div id="progress-container" class="loading-state">Loading...</div>
+
+  <h2 class="section-title">Lists</h2>
+  <div id="lists-container" class="loading-state">Loading...</div>
+
+  <script>
+    const API_URL = "https://xdqhuimgpmkkfstntiyk.supabase.co/functions/v1/helen-board";
+    const TOKEN = "0FCtR3vVW6zBsU92KJ4lO8MGkwDTaNZA";
+
+    let openMetricId = null;
+    const chartInstances = {};
+    let blocksData = [];
+
+    async function markListItemDone(event, itemId, context) {
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      btn.textContent = "…";
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list_item_done", id: itemId }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (context === "rightnow") {
+          const row = btn.closest(".rightnow-item");
+          if (row) row.remove();
+          const card = document.querySelector(".rightnow-card");
+          if (card && !card.querySelector(".rightnow-item")) {
+            document.getElementById("rightnow-container").innerHTML = `<div class="empty-state">Nothing urgent right now.</div>`;
+          }
+        } else {
+          const li = btn.closest("li");
+          if (li) {
+            li.classList.add("done");
+            btn.outerHTML = `<span class="checkbox">☑</span>`;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to mark item done:", err);
+        btn.disabled = false;
+        btn.textContent = "☐";
+      }
+    }
+
+    async function deleteListItem(event, itemId, itemTitle) {
+      if (!confirm(`Delete "${itemTitle}"? This can't be undone.`)) return;
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete_item", id: itemId }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const li = btn.closest("li");
+        if (li) li.remove();
+        const ul = btn.closest("ul");
+        if (ul && !ul.querySelector("li")) {
+          ul.closest(".list-card")?.remove();
+        }
+      } catch (err) {
+        console.error("Failed to delete item:", err);
+        btn.disabled = false;
+      }
+    }
+
+    async function markBlockDone(event, blockId) {
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "block_done", id: blockId }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const result = await res.json();
+        const doneBlock = blocksData.find((b) => b.id === blockId);
+        if (doneBlock) doneBlock.status = "done";
+        if (result.next) {
+          const nextBlock = blocksData.find((b) => b.title === result.next && b.status === "pending");
+          if (nextBlock) nextBlock.status = "current";
+        }
+        renderBlocks(blocksData, document.getElementById("blocks-container"));
+      } catch (err) {
+        console.error("Failed to mark block done:", err);
+        btn.disabled = false;
+      }
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function daysAgo(dateStr) {
+      const then = new Date(dateStr + "T00:00:00");
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const diffMs = now - then;
+      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) return "today";
+      if (diffDays === 1) return "1 day ago";
+      return `${diffDays} days ago`;
+    }
+
+    let _popupBlockId = null;
+    let _popupChipEl = null;
+
+    function _getOrCreateBlockPopup() {
+      let popup = document.getElementById('block-delete-popup');
+      if (popup) return popup;
+      popup = document.createElement('div');
+      popup.id = 'block-delete-popup';
+      popup.className = 'block-delete-popup';
+      popup.style.display = 'none';
+      popup.innerHTML = `
+        <div class="block-delete-popup-title" id="block-popup-title"></div>
+        <button id="block-popup-delete-one">Delete this one</button>
+        <button id="block-popup-delete-all" class="danger">Delete all future</button>`;
+      document.body.appendChild(popup);
+      document.getElementById('block-popup-delete-one').addEventListener('click', async () => {
+        const id = _popupBlockId, chip = _popupChipEl;
+        _hideBlockPopup();
+        if (!id) return;
+        try {
+          const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete_block", id }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (chip) chip.remove();
+        } catch (err) { console.error("Failed to delete block:", err); }
+      });
+      document.getElementById('block-popup-delete-all').addEventListener('click', async () => {
+        const id = _popupBlockId, chip = _popupChipEl;
+        _hideBlockPopup();
+        if (!id) return;
+        try {
+          const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete_block_recurring", id }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (chip) chip.remove();
+        } catch (err) { console.error("Failed to delete recurring blocks:", err); }
+      });
+      return popup;
+    }
+
+    function showBlockDeletePopup(x, y, blockId, blockTitle, chipEl) {
+      _popupBlockId = blockId;
+      _popupChipEl = chipEl;
+      const popup = _getOrCreateBlockPopup();
+      document.getElementById('block-popup-title').textContent = blockTitle;
+      popup.style.left = Math.min(x, window.innerWidth - 196) + 'px';
+      popup.style.top = Math.min(y, window.innerHeight - 116) + 'px';
+      popup.style.display = 'block';
+      setTimeout(() => document.addEventListener('click', _dismissBlockPopupOutside), 0);
+    }
+
+    function _dismissBlockPopupOutside(e) {
+      const popup = document.getElementById('block-delete-popup');
+      if (popup && !popup.contains(e.target)) _hideBlockPopup();
+    }
+
+    function _hideBlockPopup() {
+      const popup = document.getElementById('block-delete-popup');
+      if (popup) popup.style.display = 'none';
+      document.removeEventListener('click', _dismissBlockPopupOutside);
+      _popupBlockId = null;
+      _popupChipEl = null;
+    }
+
+    async function addRightNowItem(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const input = form.querySelector("input[type='text']");
+      const title = input.value.trim();
+      if (!title) return;
+      const btn = form.querySelector("button[type='submit']");
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add_right_now", title }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const item = await res.json();
+        const card = form.closest(".rightnow-card");
+        const emptyEl = card.querySelector(".rightnow-empty");
+        if (emptyEl) emptyEl.remove();
+        const div = document.createElement("div");
+        div.className = "rightnow-item";
+        div.dataset.itemId = item.id;
+        div.innerHTML = `
+          <button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'rightnow')">☐</button>
+          <span class="rightnow-title">${escapeHtml(item.title)}</span>`;
+        card.insertBefore(div, form);
+        input.value = "";
+      } catch (err) {
+        console.error("Failed to add Right Now item:", err);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function addListItem(event, category) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const input = form.querySelector("input[type='text']");
+      const title = input.value.trim();
+      if (!title) return;
+      const btn = form.querySelector("button[type='submit']");
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add_list_item", category, title }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const item = await res.json();
+        const ul = form.closest(".list-body").querySelector("ul");
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'list')">☐</button>
+          <span class="item-title">${escapeHtml(item.title)}</span>`;
+        ul.appendChild(li);
+        input.value = "";
+      } catch (err) {
+        console.error("Failed to add list item:", err);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function addNewCategory(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const categoryInput = form.querySelector("input[name='category']");
+      const titleInput = form.querySelector("input[name='itemTitle']");
+      const category = categoryInput.value.trim();
+      const title = titleInput.value.trim();
+      if (!category || !title) return;
+      const btn = form.querySelector("button[type='submit']");
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add_list_item", category, title }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const item = await res.json();
+        const container = document.getElementById("lists-container");
+        const newCatCard = container.querySelector(".new-category-card");
+        const escapedCat = escapeHtml(category);
+        const safeCat = escapedCat.replace(/'/g, "\\'");
+        const card = document.createElement("div");
+        card.className = "list-card open";
+        card.dataset.category = category;
+        card.innerHTML = `
+          <div class="list-card-header" onclick="this.closest('.list-card').classList.toggle('open')">
+            <h3 style="margin:0">${escapedCat}</h3>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="delete-category-btn" title="Delete category"
+                onclick="deleteCategoryConfirm(event, '${safeCat}')">🗑</button>
+              <span class="list-chevron">▾</span>
+            </div>
+          </div>
+          <div class="list-body" style="display:block;padding-top:12px">
+            <ul>
+              <li>
+                <button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'list')">☐</button>
+                <span class="item-title">${escapeHtml(title)}</span>
+              </li>
+            </ul>
+            <form class="add-item-form" onsubmit="addListItem(event, '${safeCat}')">
+              <input type="text" placeholder="Add item…" required />
+              <button type="submit">+</button>
+            </form>
+          </div>`;
+        container.insertBefore(card, newCatCard);
+        categoryInput.value = "";
+        titleInput.value = "";
+      } catch (err) {
+        console.error("Failed to create category:", err);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function deleteCategoryConfirm(event, category) {
+      event.stopPropagation();
+      const card = event.target.closest(".list-card");
+      const itemCount = card ? card.querySelectorAll("ul li").length : 0;
+      const input = prompt(
+        `Type "${category}" to permanently delete this category and all ${itemCount} item${itemCount !== 1 ? "s" : ""}. This cannot be undone.`
+      );
+      if (input === null) return;
+      if (input !== category) {
+        alert(`Did not match — expected exactly: ${category}`);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete_category", category }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (card) card.remove();
+      } catch (err) {
+        console.error("Failed to delete category:", err);
+        alert("Something went wrong — check the console.");
+      }
+    }
+
+    async function loadDashboard() {
+      const rightNowContainer = document.getElementById("rightnow-container");
+      const blocksContainer = document.getElementById("blocks-container");
+      const weekContainer = document.getElementById("week-container");
+      const upcomingContainer = document.getElementById("upcoming-container");
+      const consistencyContainer = document.getElementById("consistency-container");
+      const progressContainer = document.getElementById("progress-container");
+      const listsContainer = document.getElementById("lists-container");
+
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`);
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        const data = await res.json();
+
+        renderRightNow(data.lists || {}, rightNowContainer);
+        renderBlocks(data.blocks || [], blocksContainer);
+        renderWeek(data.weekBlocks || {}, weekContainer);
+        renderUpcoming(data.reminders || [], data.events || [], upcomingContainer);
+        renderConsistency(data.progress || {}, consistencyContainer);
+        renderProgress(data.progress || {}, progressContainer);
+        renderLists(data.lists || {}, listsContainer);
+      } catch (err) {
+        console.error("Failed to load dashboard data:", err);
+        rightNowContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
+        blocksContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
+        weekContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
+        upcomingContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
+        consistencyContainer.innerHTML = `<div class="error-state">Couldn't load data.</div>`;
+        progressContainer.innerHTML = `<div class="error-state">Couldn't load progress data.</div>`;
+        listsContainer.innerHTML = `<div class="error-state">Couldn't load list data.</div>`;
+      }
+    }
+
+    // "Right Now" is a dedicated, always-fixed category (set only via the
+    // "Right now:" Telegram trigger — never freely chosen by the
+    // classifier), so it's rendered here in its own prominent panel at the
+    // very top of the page rather than mixed into the general Lists grid.
+    function renderRightNow(listData, container) {
+      const items = (listData["Right Now"] || []).filter((i) => i.status !== "done");
+      const itemsHtml = items
+        .map(
+          (item) => `
+        <div class="rightnow-item" data-item-id="${item.id}">
+          <button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'rightnow')">☐</button>
+          <span class="rightnow-title">${escapeHtml(item.title)}</span>
+        </div>`
+        )
+        .join("");
+      container.innerHTML = `
+        <div class="rightnow-card">
+          ${itemsHtml || `<div class="rightnow-empty">Nothing urgent right now.</div>`}
+          <form class="add-item-form rightnow-form" onsubmit="addRightNowItem(event)">
+            <input type="text" placeholder="Add urgent item…" required />
+            <button type="submit">+</button>
+          </form>
+        </div>`;
+    }
+
+    const BLOCK_ICONS = { done: "✅", current: "▶️", skipped: "⏭️", pending: "⬜" };
+
+    function renderBlocks(blocks, container) {
+      blocksData = blocks;
+      if (blocks.length === 0) {
+        container.innerHTML = `<div class="empty-state">No blocks set for today yet.</div>`;
+        return;
+      }
+
+      const itemsHtml = blocks
+        .map((b) => {
+          const canComplete = b.status === "current" || b.status === "pending";
+          const iconEl = canComplete
+            ? `<button class="checkbox" title="Mark done" onclick="markBlockDone(event, '${b.id}')">${BLOCK_ICONS[b.status] || "⬜"}</button>`
+            : `<div class="block-icon">${BLOCK_ICONS[b.status] || "⬜"}</div>`;
+          return `
+        <div class="block-item ${escapeHtml(b.status)}" data-block-id="${b.id}">
+          ${iconEl}
+          <div class="block-title">${escapeHtml(b.title)}</div>
+        </div>`;
+        })
+        .join("");
+
+      container.innerHTML = `<div class="blocks-card">${itemsHtml}</div>`;
+    }
+
+    function timeToMinutes(t) {
+      // t looks like "06:00:00" or "06:00"
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + m;
+    }
+
+    // Assigns each timed block a lane (for side-by-side placement) and the
+    // total lane count for its overlapping cluster, so clashing blocks sit
+    // next to each other instead of on top of one another.
+    function layoutOverlaps(blocks) {
+      const sorted = [...blocks].sort((a, b) => a._start - b._start || a._end - b._end);
+      const clusters = [];
+      let current = [];
+      let clusterMaxEnd = -Infinity;
+
+      for (const b of sorted) {
+        if (current.length && b._start >= clusterMaxEnd) {
+          clusters.push(current);
+          current = [];
+          clusterMaxEnd = -Infinity;
+        }
+        current.push(b);
+        clusterMaxEnd = Math.max(clusterMaxEnd, b._end);
+      }
+      if (current.length) clusters.push(current);
+
+      for (const cluster of clusters) {
+        const laneEnds = [];
+        for (const b of cluster) {
+          let placed = false;
+          for (let i = 0; i < laneEnds.length; i++) {
+            if (laneEnds[i] <= b._start) {
+              b._lane = i;
+              laneEnds[i] = b._end;
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            b._lane = laneEnds.length;
+            laneEnds.push(b._end);
+          }
+        }
+        for (const b of cluster) b._totalLanes = laneEnds.length;
+      }
+      return sorted;
+    }
+
+    function renderWeek(weekBlocksData, container) {
+      const dates = Object.keys(weekBlocksData).sort();
+
+      // Determine a shared time range across the whole week so every day
+      // column lines up against the same hour gutter.
+      let rangeStartMin = null;
+      let rangeEndMin = null;
+      for (const date of dates) {
+        for (const b of weekBlocksData[date]) {
+          if (!b.scheduled_time) continue;
+          const s = timeToMinutes(b.scheduled_time);
+          const e = b.end_time ? timeToMinutes(b.end_time) : s + 60;
+          if (rangeStartMin === null || s < rangeStartMin) rangeStartMin = s;
+          if (rangeEndMin === null || e > rangeEndMin) rangeEndMin = e;
+        }
+      }
+      if (rangeStartMin === null) {
+        rangeStartMin = 5 * 60; // 5am default
+        rangeEndMin = 22 * 60; // 10pm default
+      } else {
+        rangeStartMin = Math.max(0, Math.floor((rangeStartMin - 60) / 60) * 60);
+        rangeEndMin = Math.min(24 * 60, Math.ceil((rangeEndMin + 60) / 60) * 60);
+      }
+      const pxPerMin = 1;
+      const timelineHeight = (rangeEndMin - rangeStartMin) * pxPerMin;
+
+      const todayIso = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+      // Build a rolling 7-day range starting from TODAY specifically — never
+      // inferred from the data itself, since a stray block dated before
+      // today (leftover test data, etc.) would otherwise shift the whole
+      // week a day early.
+      const allDates = [];
+      const base = new Date(todayIso + "T00:00:00");
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(base);
+        d.setDate(d.getDate() + i);
+        allDates.push(d.toISOString().split("T")[0]);
+      }
+
+      // Blocks sit below the day-header (~34px) and the fixed-height
+      // flexible-list area (56px) within each day column. The gutter labels
+      // are absolutely positioned, so they must have this same offset baked
+      // into their own "top" — an empty spacer div here does NOT push down
+      // absolutely-positioned siblings, which was the source of the
+      // previous "labels don't line up with blocks" bug.
+      const GUTTER_TOP_OFFSET = 34 + 56; // day-header height + flexible-list height
+
+      const gutterLabels = [];
+      for (let m = rangeStartMin; m <= rangeEndMin; m += 60) {
+        gutterLabels.push(`<div class="week-gutter-label" style="top:${(m - rangeStartMin) * pxPerMin + GUTTER_TOP_OFFSET}px;">${formatHourLabel(m)}</div>`);
+      }
+
+      const dayColumnsHtml = allDates
+        .map((dateStr) => {
+          const dayBlocks = weekBlocksData[dateStr] || [];
+          const timed = dayBlocks
+            .filter((b) => b.scheduled_time)
+            .map((b) => ({
+              ...b,
+              _start: timeToMinutes(b.scheduled_time),
+              _end: b.end_time ? timeToMinutes(b.end_time) : timeToMinutes(b.scheduled_time) + 60,
+            }));
+          const flexible = dayBlocks.filter((b) => !b.scheduled_time);
+
+          layoutOverlaps(timed);
+
+          const timedHtml = timed
+            .map((b) => {
+              const top = (b._start - rangeStartMin) * pxPerMin;
+              const height = Math.max(20, (b._end - b._start) * pxPerMin);
+              const widthPct = 100 / b._totalLanes;
+              const leftPct = b._lane * widthPct;
+              const statusClass = b.status === "done" ? "status-done" : "";
+              return `
+              <div class="timed-block ${statusClass}" data-block-id="${b.id}" data-block-title="${escapeHtml(b.title)}" style="top:${top}px; height:${height}px; left:${leftPct}%; width:calc(${widthPct}% - 4px);">
+                <div class="tb-title">${escapeHtml(b.title)}</div>
+                <div class="tb-time">${formatTime12hShort(b.scheduled_time)}</div>
+              </div>`;
+            })
+            .join("");
+
+          const flexibleHtml = flexible.length
+            ? flexible
+                .map(
+                  (b) =>
+                    `<div class="flexible-item ${b.status === "done" ? "done" : ""}" data-block-id="${b.id}" data-block-title="${escapeHtml(b.title)}">${BLOCK_ICONS[b.status] || "⬜"} ${escapeHtml(b.title)}</div>`
+                )
+                .join("")
+            : `<div class="flex-empty">No flexible blocks</div>`;
+
+          const dateObj = new Date(dateStr + "T00:00:00");
+          const label = dateObj.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+          const isToday = dateStr === todayIso;
+
+          return `
+          <div class="day-column ${isToday ? "is-today" : ""}">
+            <div class="day-header">${label}</div>
+            <div class="flexible-list">${flexibleHtml}</div>
+            <div class="day-timeline" style="height:${timelineHeight}px;">${timedHtml}</div>
+          </div>`;
+        })
+        .join("");
+
+      container.innerHTML = `
+        <div class="week-wrapper">
+          <div class="week-gutter" style="height:${timelineHeight + GUTTER_TOP_OFFSET}px;">
+            ${gutterLabels.join("")}
+          </div>
+          <div class="week-scroll">${dayColumnsHtml}</div>
+        </div>
+      `;
+      if (!container.dataset.contextmenuBound) {
+        container.dataset.contextmenuBound = "1";
+        container.addEventListener('contextmenu', (e) => {
+          const chip = e.target.closest('[data-block-id]');
+          if (!chip) return;
+          e.preventDefault();
+          showBlockDeletePopup(e.clientX, e.clientY, chip.dataset.blockId, chip.dataset.blockTitle, chip);
+        });
+      }
+    }
+
+    function formatHourLabel(minutes) {
+      let h = Math.floor(minutes / 60) % 24;
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12;
+      if (h === 0) h = 12;
+      return `${h}${ampm}`;
+    }
+
+    function formatTime12hShort(time24) {
+      const [hStr, mStr] = time24.split(":");
+      let h = parseInt(hStr, 10);
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12;
+      if (h === 0) h = 12;
+      return mStr === "00" ? `${h}${ampm}` : `${h}:${mStr}${ampm}`;
+    }
+
+    function formatRelativeTime(dateObj) {
+      const now = new Date();
+      const diffMs = dateObj - now;
+      const diffMins = Math.round(diffMs / 60000);
+      const diffHours = Math.round(diffMs / 3600000);
+      const diffDays = Math.round(diffMs / 86400000);
+
+      if (diffMins < 60 && diffMins >= 0) return `in ${diffMins}m`;
+      if (diffMins < 0 && diffMins > -60) return `${-diffMins}m ago`;
+      if (diffHours < 24 && diffHours >= 1) return `in ${diffHours}h`;
+      if (diffHours < 0 && diffHours > -24) return `${-diffHours}h ago`;
+      if (diffDays >= 1) return `in ${diffDays}d`;
+      if (diffDays <= -1) return `${-diffDays}d ago`;
+      return "now";
+    }
+
+    function renderUpcoming(reminders, events, container) {
+      const items = [];
+
+      reminders.forEach((r) => {
+        items.push({
+          type: "reminder",
+          icon: "⏰",
+          title: r.text,
+          date: new Date(r.remind_at),
+          meta: new Date(r.remind_at).toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata",
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
+        });
+      });
+
+      events.forEach((e) => {
+        items.push({
+          type: "event",
+          icon: "📅",
+          title: e.title,
+          date: new Date(e.event_date + "T00:00:00"),
+          meta: e.event_date + (e.notes ? ` · ${e.notes}` : ""),
+        });
+      });
+
+      if (items.length === 0) {
+        container.innerHTML = `<div class="empty-state">Nothing upcoming.</div>`;
+        return;
+      }
+
+      items.sort((a, b) => a.date - b.date);
+
+      const itemsHtml = items
+        .map(
+          (item) => `
+        <div class="upcoming-item">
+          <div class="upcoming-icon">${item.icon}</div>
+          <div class="upcoming-body">
+            <div class="upcoming-title">${escapeHtml(item.title)}</div>
+            <div class="upcoming-meta">${escapeHtml(item.meta)}</div>
+          </div>
+          <div class="upcoming-when">${escapeHtml(formatRelativeTime(item.date))}</div>
+        </div>`
+        )
+        .join("");
+
+      container.innerHTML = `<div class="upcoming-card">${itemsHtml}</div>`;
+    }
+
+    // Flattens { category: { metric: [entries] } } into [{ metric, entries }]
+    // for cross-category views like Consistency.
+    function flattenMetrics(progressData) {
+      const flat = [];
+      for (const category of Object.keys(progressData)) {
+        for (const metric of Object.keys(progressData[category])) {
+          flat.push({ category, metric, entries: progressData[category][metric] });
+        }
+      }
+      return flat;
+    }
+
+    function renderConsistency(progressData, container) {
+      const flat = flattenMetrics(progressData);
+      if (flat.length === 0) {
+        container.innerHTML = `<div class="empty-state">No progress logged yet.</div>`;
+        return;
+      }
+
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
+      const counts = flat.map(({ metric, entries }) => {
+        const recentCount = entries.filter((e) => {
+          const d = new Date(e.entry_date + "T00:00:00");
+          return d >= sevenDaysAgo;
+        }).length;
+        return { metric, count: recentCount };
+      });
+
+      counts.sort((a, b) => a.count - b.count || a.metric.localeCompare(b.metric));
+
+      container.innerHTML = `
+        <div class="consistency-card">
+          <div class="consistency-note">Fewest logs first — these are the ones you're neglecting.</div>
+          <div style="height: ${Math.max(120, counts.length * 36)}px;">
+            <canvas id="consistency-chart"></canvas>
+          </div>
+        </div>
+      `;
+
+      const ctx = document.getElementById("consistency-chart").getContext("2d");
+      new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: counts.map((c) => c.metric),
+          datasets: [{
+            label: "Times logged",
+            data: counts.map((c) => c.count),
+            backgroundColor: counts.map((c) => (c.count === 0 ? "#f87171" : "#6366f1")),
+            borderRadius: 4,
+            maxBarThickness: 24,
+          }],
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { beginAtZero: true, ticks: { precision: 0 } },
+          },
+        },
+      });
+    }
+
+    function computeStats(entries) {
+      const total = entries.length;
+      const values = entries.map((e) => e.value);
+      const best = Math.max(...values);
+      const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      const lastEntry = entries[entries.length - 1];
+
+      let trend = "flat";
+      if (entries.length >= 2) {
+        const latest = entries[entries.length - 1].value;
+        const priorAvg =
+          entries.slice(0, -1).reduce((a, b) => a + b.value, 0) / (entries.length - 1);
+        if (latest > priorAvg * 1.05) trend = "up";
+        else if (latest < priorAvg * 0.95) trend = "down";
+      }
+
+      return { total, best, avg: Math.round(avg * 10) / 10, lastDate: lastEntry.entry_date, trend };
+    }
+
+    function renderProgress(progressData, container) {
+      const categoryNames = Object.keys(progressData).sort();
+      if (categoryNames.length === 0) {
+        container.innerHTML = `<div class="empty-state">No progress logged yet.</div>`;
+        return;
+      }
+
+      container.innerHTML = "";
+
+      categoryNames.forEach((category) => {
+        const metricNames = Object.keys(progressData[category]).sort();
+
+        const categoryHeading = document.createElement("h3");
+        categoryHeading.className = "category-title";
+        categoryHeading.textContent = category;
+        container.appendChild(categoryHeading);
+
+        const accordion = document.createElement("div");
+        accordion.className = "accordion";
+        container.appendChild(accordion);
+
+        metricNames.forEach((metric) => {
+          const entries = progressData[category][metric];
+          const unit = entries.find((e) => e.unit)?.unit || "";
+          const stats = computeStats(entries);
+          const metricId = `${category}-${metric}`.replace(/[^a-z0-9]/gi, "-");
+
+          const item = document.createElement("div");
+          item.className = "accordion-item";
+          item.dataset.metricId = metricId;
+
+          const trendSymbol = stats.trend === "up" ? "▲" : stats.trend === "down" ? "▼" : "●";
+          const trendClass = stats.trend === "up" ? "trend-up" : stats.trend === "down" ? "trend-down" : "trend-flat";
+
+          item.innerHTML = `
+            <div class="accordion-header">
+              <div>
+                <div class="accordion-title">${escapeHtml(metric)}</div>
+                <div class="accordion-meta">Logged ${stats.total}× · last ${daysAgo(stats.lastDate)}</div>
+              </div>
+              <div class="accordion-chevron">▾</div>
+            </div>
+            <div class="accordion-body">
+              <div class="stats-row">
+                <div class="stat-box">
+                  <div class="stat-value">${stats.total}</div>
+                  <div class="stat-label">Logs</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-value">${stats.best}${unit ? " " + escapeHtml(unit) : ""}</div>
+                  <div class="stat-label">Best</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-value">${stats.avg}${unit ? " " + escapeHtml(unit) : ""}</div>
+                  <div class="stat-label">Average</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-value ${trendClass}">${trendSymbol}</div>
+                  <div class="stat-label">Trend</div>
+                </div>
+              </div>
+              <div style="height: 220px;">
+                <canvas id="chart-${metricId}"></canvas>
+              </div>
+            </div>
+          `;
+
+          accordion.appendChild(item);
+
+          item.querySelector(".accordion-header").addEventListener("click", () => {
+            toggleAccordion(metricId, entries, metric);
+          });
+        });
+      });
+    }
+
+    function toggleAccordion(metricId, entries, metricName) {
+      const allItems = document.querySelectorAll(".accordion-item");
+
+      if (openMetricId === metricId) {
+        document.querySelector(`.accordion-item[data-metric-id="${metricId}"]`).classList.remove("open");
+        openMetricId = null;
+        return;
+      }
+
+      allItems.forEach((el) => el.classList.remove("open"));
+      const target = document.querySelector(`.accordion-item[data-metric-id="${metricId}"]`);
+      target.classList.add("open");
+      openMetricId = metricId;
+
+      if (!chartInstances[metricId]) {
+        const ctx = document.getElementById(`chart-${metricId}`).getContext("2d");
+        chartInstances[metricId] = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: entries.map((e) => e.entry_date),
+            datasets: [{
+              label: metricName,
+              data: entries.map((e) => e.value),
+              borderColor: "#6366f1",
+              backgroundColor: "rgba(99, 102, 241, 0.1)",
+              tension: 0.3,
+              fill: true,
+              pointRadius: 4,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } },
+          },
+        });
+      }
+    }
+
+    function renderLists(listData, container) {
+      const categoryNames = Object.keys(listData)
+        .filter((c) => c !== "Right Now")
+        .sort();
+
+      container.innerHTML = "";
+      container.className = "accordion";
+
+      categoryNames.forEach((category) => {
+        const items = listData[category];
+        const escapedCat = escapeHtml(category);
+        const safeCat = escapedCat.replace(/'/g, "\\'");
+        const itemsHtml = items
+          .map(
+            (item) => `
+          <li class="${item.status === "done" ? "done" : ""}">
+            ${item.status === "done"
+              ? `<span class="checkbox">☑</span>`
+              : `<button class="checkbox" onclick="markListItemDone(event, '${item.id}', 'list')">☐</button>`}
+            <span class="item-title">${escapeHtml(item.title)}</span>
+            ${item.status === "done"
+              ? `<button class="delete-btn" title="Delete" onclick="deleteListItem(event, '${item.id}', '${escapeHtml(item.title).replace(/'/g, "\\'")}')">🗑</button>`
+              : ""}
+          </li>`
+          )
+          .join("");
+
+        const card = document.createElement("div");
+        card.className = "list-card";
+        card.dataset.category = category;
+        card.innerHTML = `
+          <div class="list-card-header" onclick="this.closest('.list-card').classList.toggle('open')">
+            <h3 style="margin:0">${escapedCat}</h3>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="delete-category-btn" title="Delete category"
+                onclick="deleteCategoryConfirm(event, '${safeCat}')">🗑</button>
+              <span class="list-chevron">▾</span>
+            </div>
+          </div>
+          <div class="list-body">
+            <ul>${itemsHtml}</ul>
+            <form class="add-item-form" onsubmit="addListItem(event, '${safeCat}')">
+              <input type="text" placeholder="Add item…" required />
+              <button type="submit">+</button>
+            </form>
+          </div>`;
+        container.appendChild(card);
+      });
+
+      const newCatCard = document.createElement("div");
+      newCatCard.className = "list-card new-category-card";
+      newCatCard.innerHTML = `
+        <div class="list-card-header" style="cursor:default">
+          <h3 style="margin:0;color:var(--text-dim)">New category</h3>
+        </div>
+        <div class="list-body" style="display:block;padding-top:12px">
+          <form class="add-category-form" onsubmit="addNewCategory(event)">
+            <input type="text" name="category" placeholder="Category name…" required />
+            <input type="text" name="itemTitle" placeholder="First item…" required />
+            <button type="submit">+</button>
+          </form>
+        </div>`;
+      container.appendChild(newCatCard);
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>
