@@ -13,6 +13,24 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+const LONG_TERM_GOALS = [
+  "Building an army of Nirvana Yoga teachers",
+  "Finishing a Master's in Yoga",
+  "Publishing 20 books",
+  "Doing regular sadhana",
+  "Learning Spanish",
+  "Learning Romanian",
+  "Learning Hindi",
+  "Learning anatomy and physiology",
+  "Publishing on YouTube",
+  "Writing newsletters",
+  "Working on the CRM tool",
+  "Working on the PWA",
+  "Learning survival skills and practical know-how",
+  "Cooking",
+  "Farming",
+];
+
 Deno.serve(async (req) => {
   const provided = req.headers.get("X-Cron-Secret");
   if (provided !== CRON_SECRET) {
@@ -44,7 +62,13 @@ Deno.serve(async (req) => {
   });
 
   const summaryText = await writeDigestWithSonnet(reminders ?? [], eventsToday, todayIST);
-  await sendTelegramMessage(summaryText);
+  const dayOfWeek = new Date(todayIST + "T00:00:00").getDay(); // 1=Mon
+  const isMonday = dayOfWeek === 1;
+  const goalLine = isMonday
+    ? `\n🎯 Long-term focus: ${LONG_TERM_GOALS[getDayOfYear(todayIST) % LONG_TERM_GOALS.length]}`
+    : "";
+  const fullMessage = `${summaryText}\n\nHave you done today's goal writing — declarations, gratitude, habit focus?${goalLine}`;
+  await sendTelegramMessage(fullMessage);
 
   return new Response("digest sent", { status: 200 });
 });
@@ -88,6 +112,12 @@ Output ONLY the message text, nothing else — no preamble, no markdown formatti
 
   const data = await res.json();
   return data.content?.[0]?.text?.trim() ?? "Good morning! Have a great day.";
+}
+
+function getDayOfYear(dateStr: string): number {
+  const d = new Date(dateStr + "T00:00:00");
+  const startOfYear = new Date(d.getFullYear(), 0, 1);
+  return Math.floor((d.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
 }
 
 function getTodayIST(): string {

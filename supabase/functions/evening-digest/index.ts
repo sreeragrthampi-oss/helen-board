@@ -25,7 +25,8 @@ Deno.serve(async (req) => {
   const tomorrowSection = await getTomorrowPreview(tomorrowIST);
   const journalSection = await getJournalForObsidian(todayIST);
 
-  const message = `🌙 Evening wrap-up — ${todayIST}\n\n${blocksSection}\n\n${tomorrowSection}\n\n${journalSection}`;
+  const checkins = `Did you check helen-board today?\nAre you working on this week's goals?`;
+  const message = `🌙 Evening wrap-up — ${todayIST}\n\n${blocksSection}\n\n${tomorrowSection}\n\n${journalSection}\n\n${checkins}`;
 
   await sendTelegramMessage(message);
 
