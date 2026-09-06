@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const [progress, lists, reminders, events, blocks, weekBlocks, journalDraft] = await Promise.all([
+    const [progress, lists, reminders, events, blocks, weekBlocks, journalDraft, goalProgress] = await Promise.all([
       getProgressData(),
       getListData(),
       getRemindersData(),
@@ -169,8 +169,9 @@ Deno.serve(async (req) => {
       getBlocksData(),
       getWeekBlocksData(),
       getJournalDraftData(),
+      getGoalProgress(),
     ]);
-    return new Response(JSON.stringify({ progress, lists, reminders, events, blocks, weekBlocks, journalDraft }), {
+    return new Response(JSON.stringify({ progress, lists, reminders, events, blocks, weekBlocks, journalDraft, goalProgress }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
@@ -315,6 +316,87 @@ async function getJournalDraftData(): Promise<string> {
 
   if (error) return "";
   return data?.content ?? "";
+}
+
+type GoalRow = {
+  category: string;
+  metric_name: string;
+  goal_type: "personal_best" | "cumulative" | "frequency";
+  target_value: number;
+  target_date: string | null;
+  period_days: number | null;
+};
+
+type GoalProgressItem = {
+  category: string;
+  metric_name: string;
+  goal_type: string;
+  current: number;
+  target: number;
+  percent: number;
+  projected_date?: string;
+};
+
+async function getGoalProgress(): Promise<GoalProgressItem[]> {
+  const { data: goals, error: goalsError } = await supabase
+    .from("goals")
+    .select("category, metric_name, goal_type, target_value, target_date, period_days")
+    .eq("active", true);
+
+  if (goalsError) throw goalsError;
+  if (!goals || goals.length === 0) return [];
+
+  const todayIST = getTodayIST();
+  const results: GoalProgressItem[] = [];
+
+  for (const goal of goals as GoalRow[]) {
+    const { data: entries } = await supabase
+      .from("progress_entries")
+      .select("value, entry_date")
+      .eq("category", goal.category)
+      .eq("metric_name", goal.metric_name)
+      .order("entry_date", { ascending: true });
+
+    const rows = entries ?? [];
+    let current = 0;
+
+    if (goal.goal_type === "personal_best") {
+      current = rows.length > 0 ? Math.max(...rows.map((r) => r.value)) : 0;
+    } else if (goal.goal_type === "cumulative") {
+      current = rows.reduce((sum, r) => sum + r.value, 0);
+    } else if (goal.goal_type === "frequency") {
+      const periodDays = goal.period_days ?? 7;
+      const today = new Date(todayIST + "T00:00:00");
+      const cutoff = new Date(today.getTime() - (periodDays - 1) * 24 * 60 * 60 * 1000);
+      const cutoffStr = cutoff.toISOString().split("T")[0];
+      current = rows.filter((r) => r.entry_date >= cutoffStr).length;
+    }
+
+    const item: GoalProgressItem = {
+      category: goal.category,
+      metric_name: goal.metric_name,
+      goal_type: goal.goal_type,
+      current,
+      target: goal.target_value,
+      percent: goal.target_value > 0 ? Math.round((current / goal.target_value) * 100) : 0,
+    };
+
+    if (goal.goal_type === "cumulative" && goal.target_date && rows.length > 0 && current < goal.target_value) {
+      const firstDate = new Date(rows[0].entry_date + "T00:00:00");
+      const today = new Date(todayIST + "T00:00:00");
+      const daysSinceFirst = Math.max(1, (today.getTime() - firstDate.getTime()) / (24 * 60 * 60 * 1000));
+      const pace = current / daysSinceFirst;
+      if (pace > 0) {
+        const daysNeeded = (goal.target_value - current) / pace;
+        const projected = new Date(today.getTime() + daysNeeded * 24 * 60 * 60 * 1000);
+        item.projected_date = projected.toISOString().split("T")[0];
+      }
+    }
+
+    results.push(item);
+  }
+
+  return results;
 }
 
 function getTodayIST(): string {
