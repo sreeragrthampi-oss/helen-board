@@ -485,6 +485,51 @@
     box-sizing: border-box;
   }
   .add-block-modal input:focus { border-color: var(--accent); }
+  .add-block-type-toggle {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 14px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    padding: 3px;
+  }
+  .type-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 5px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .type-btn.active { background: var(--accent); color: #fff; }
+  .add-block-days {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 12px;
+  }
+  .add-block-days label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    color: var(--text);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    margin-bottom: 0;
+  }
+  .add-block-days input[type="checkbox"] {
+    width: auto;
+    margin-bottom: 0;
+    accent-color: var(--accent);
+  }
+
   .add-block-modal-actions {
     display: flex;
     gap: 8px;
@@ -772,6 +817,13 @@
       }
     }
 
+    function normalizeTime(val) {
+      if (!val) return null;
+      const m = val.match(/^(\d{1,2}):(\d{2})$/);
+      if (!m) return null;
+      return String(parseInt(m[1], 10)).padStart(2, '0') + ':' + m[2];
+    }
+
     function showAddBlockModal(prefilledDate) {
       let overlay = document.getElementById('add-block-overlay');
       if (!overlay) {
@@ -783,12 +835,31 @@
             <h4>Add block</h4>
             <label>Title</label>
             <input id="add-block-title" type="text" placeholder="Block title" autocomplete="off" />
-            <label>Date</label>
-            <input id="add-block-date" type="date" />
-            <label>Start time (optional)</label>
-            <input id="add-block-start" type="time" />
-            <label>End time (optional)</label>
-            <input id="add-block-end" type="time" />
+            <div class="add-block-type-toggle">
+              <button class="type-btn active" id="add-block-type-onetime">One-time</button>
+              <button class="type-btn" id="add-block-type-recurring">Recurring</button>
+            </div>
+            <div id="add-block-onetime-section">
+              <label>Date</label>
+              <input id="add-block-date" type="date" />
+            </div>
+            <div id="add-block-recurring-section" style="display:none;">
+              <label>Repeat on</label>
+              <div class="add-block-days">
+                <label><input type="checkbox" class="add-block-dow" value="1"> Mon</label>
+                <label><input type="checkbox" class="add-block-dow" value="2"> Tue</label>
+                <label><input type="checkbox" class="add-block-dow" value="3"> Wed</label>
+                <label><input type="checkbox" class="add-block-dow" value="4"> Thu</label>
+                <label><input type="checkbox" class="add-block-dow" value="5"> Fri</label>
+                <label><input type="checkbox" class="add-block-dow" value="6"> Sat</label>
+                <label><input type="checkbox" class="add-block-dow" value="0"> Sun</label>
+              </div>
+            </div>
+            <label id="add-block-start-label">Start time <span id="add-block-start-req" style="display:none;color:var(--danger);">*</span><span id="add-block-start-opt" style="color:var(--text-dim);"> (optional)</span></label>
+            <input id="add-block-start" type="text" placeholder="HH:MM  e.g. 09:30" autocomplete="off" />
+            <label>End time <span style="color:var(--text-dim);">(optional)</span></label>
+            <input id="add-block-end" type="text" placeholder="HH:MM  e.g. 10:30" autocomplete="off" />
+            <div id="add-block-error" style="color:var(--danger);font-size:0.78rem;min-height:1.1em;margin-bottom:4px;"></div>
             <div class="add-block-modal-actions">
               <button class="btn-cancel" id="add-block-cancel">Cancel</button>
               <button class="btn-add" id="add-block-submit">Add</button>
@@ -802,35 +873,80 @@
         overlay.addEventListener('click', (e) => {
           if (e.target === overlay) overlay.style.display = 'none';
         });
+
+        document.getElementById('add-block-type-onetime').addEventListener('click', () => {
+          document.getElementById('add-block-type-onetime').classList.add('active');
+          document.getElementById('add-block-type-recurring').classList.remove('active');
+          document.getElementById('add-block-onetime-section').style.display = '';
+          document.getElementById('add-block-recurring-section').style.display = 'none';
+          document.getElementById('add-block-start-req').style.display = 'none';
+          document.getElementById('add-block-start-opt').style.display = '';
+        });
+        document.getElementById('add-block-type-recurring').addEventListener('click', () => {
+          document.getElementById('add-block-type-recurring').classList.add('active');
+          document.getElementById('add-block-type-onetime').classList.remove('active');
+          document.getElementById('add-block-onetime-section').style.display = 'none';
+          document.getElementById('add-block-recurring-section').style.display = '';
+          document.getElementById('add-block-start-req').style.display = '';
+          document.getElementById('add-block-start-opt').style.display = 'none';
+        });
+
         document.getElementById('add-block-submit').addEventListener('click', async () => {
           const title = document.getElementById('add-block-title').value.trim();
-          const block_date = document.getElementById('add-block-date').value;
-          const scheduled_time = document.getElementById('add-block-start').value || null;
-          const end_time = document.getElementById('add-block-end').value || null;
-          if (!title || !block_date) return;
+          const isRecurring = document.getElementById('add-block-type-recurring').classList.contains('active');
+          const scheduled_time = normalizeTime(document.getElementById('add-block-start').value.trim());
+          const end_time = normalizeTime(document.getElementById('add-block-end').value.trim());
+          const errEl = document.getElementById('add-block-error');
+          errEl.textContent = '';
+
+          if (!title) { errEl.textContent = 'Title is required.'; return; }
+
+          let payload;
+          if (isRecurring) {
+            if (!scheduled_time) { errEl.textContent = 'Start time is required for recurring blocks (HH:MM).'; return; }
+            const checked = [...document.querySelectorAll('.add-block-dow:checked')];
+            const days_of_week = checked.map(c => parseInt(c.value));
+            if (days_of_week.length === 0) { errEl.textContent = 'Select at least one day.'; return; }
+            payload = { action: "add_recurring_block", title, scheduled_time, end_time, days_of_week };
+          } else {
+            const block_date = document.getElementById('add-block-date').value;
+            if (!block_date) { errEl.textContent = 'Date is required.'; return; }
+            payload = { action: "add_block", title, block_date, scheduled_time, end_time };
+          }
+
           const btn = document.getElementById('add-block-submit');
           btn.disabled = true;
           try {
             const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "add_block", title, block_date, scheduled_time, end_time }),
+              body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             overlay.style.display = 'none';
             await refreshWeekView();
           } catch (err) {
             console.error("Failed to add block:", err);
+            errEl.textContent = 'Something went wrong — check the console.';
           } finally {
             btn.disabled = false;
           }
         });
       }
 
+      // Reset to One-time mode on every open
+      document.getElementById('add-block-type-onetime').classList.add('active');
+      document.getElementById('add-block-type-recurring').classList.remove('active');
+      document.getElementById('add-block-onetime-section').style.display = '';
+      document.getElementById('add-block-recurring-section').style.display = 'none';
+      document.getElementById('add-block-start-req').style.display = 'none';
+      document.getElementById('add-block-start-opt').style.display = '';
       document.getElementById('add-block-title').value = '';
       document.getElementById('add-block-date').value = prefilledDate || '';
       document.getElementById('add-block-start').value = '';
       document.getElementById('add-block-end').value = '';
+      document.getElementById('add-block-error').textContent = '';
+      document.querySelectorAll('.add-block-dow').forEach(c => c.checked = false);
       overlay.style.display = 'flex';
       setTimeout(() => document.getElementById('add-block-title').focus(), 50);
     }
