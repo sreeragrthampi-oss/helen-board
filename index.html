@@ -252,6 +252,10 @@
     text-align: center;
     border-bottom: 1px solid var(--border);
     background: rgba(255,255,255,0.02);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
   }
   .day-timeline {
     position: relative;
@@ -426,6 +430,85 @@
   }
   .block-delete-popup button:hover { background: rgba(255,255,255,0.06); }
   .block-delete-popup button.danger { color: var(--danger); }
+
+  .day-add-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    line-height: 1;
+    padding: 1px 5px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .day-add-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .add-block-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .add-block-modal {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    min-width: 300px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+  }
+  .add-block-modal h4 {
+    margin: 0 0 16px;
+    font-size: 0.95rem;
+    color: var(--text);
+  }
+  .add-block-modal label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .add-block-modal input {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.88rem;
+    color: var(--text);
+    outline: none;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+  }
+  .add-block-modal input:focus { border-color: var(--accent); }
+  .add-block-modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
+  .add-block-modal-actions button {
+    border: none;
+    border-radius: 6px;
+    padding: 7px 16px;
+    font-size: 0.88rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .add-block-modal-actions .btn-cancel {
+    background: rgba(255,255,255,0.06);
+    color: var(--text-dim);
+  }
+  .add-block-modal-actions .btn-add {
+    background: var(--accent);
+    color: #fff;
+  }
+  .add-block-modal-actions .btn-add:hover { opacity: 0.85; }
+  .add-block-modal-actions .btn-cancel:hover { opacity: 0.8; }
 
   /* Quick Journal */
   .journal-card {
@@ -637,7 +720,7 @@
         } catch (err) { console.error("Failed to delete block:", err); }
       });
       document.getElementById('block-popup-delete-all').addEventListener('click', async () => {
-        const id = _popupBlockId, chip = _popupChipEl;
+        const id = _popupBlockId;
         _hideBlockPopup();
         if (!id) return;
         try {
@@ -647,7 +730,7 @@
             body: JSON.stringify({ action: "delete_block_recurring", id }),
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          if (chip) chip.remove();
+          await refreshWeekView();
         } catch (err) { console.error("Failed to delete recurring blocks:", err); }
       });
       return popup;
@@ -675,6 +758,81 @@
       document.removeEventListener('click', _dismissBlockPopupOutside);
       _popupBlockId = null;
       _popupChipEl = null;
+    }
+
+    async function refreshWeekView() {
+      const weekContainer = document.getElementById("week-container");
+      try {
+        const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        renderWeek(data.weekBlocks || {}, weekContainer);
+      } catch (err) {
+        console.error("Failed to refresh week view:", err);
+      }
+    }
+
+    function showAddBlockModal(prefilledDate) {
+      let overlay = document.getElementById('add-block-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'add-block-overlay';
+        overlay.className = 'add-block-modal-overlay';
+        overlay.innerHTML = `
+          <div class="add-block-modal">
+            <h4>Add block</h4>
+            <label>Title</label>
+            <input id="add-block-title" type="text" placeholder="Block title" autocomplete="off" />
+            <label>Date</label>
+            <input id="add-block-date" type="date" />
+            <label>Start time (optional)</label>
+            <input id="add-block-start" type="time" />
+            <label>End time (optional)</label>
+            <input id="add-block-end" type="time" />
+            <div class="add-block-modal-actions">
+              <button class="btn-cancel" id="add-block-cancel">Cancel</button>
+              <button class="btn-add" id="add-block-submit">Add</button>
+            </div>
+          </div>`;
+        document.body.appendChild(overlay);
+
+        document.getElementById('add-block-cancel').addEventListener('click', () => {
+          overlay.style.display = 'none';
+        });
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) overlay.style.display = 'none';
+        });
+        document.getElementById('add-block-submit').addEventListener('click', async () => {
+          const title = document.getElementById('add-block-title').value.trim();
+          const block_date = document.getElementById('add-block-date').value;
+          const scheduled_time = document.getElementById('add-block-start').value || null;
+          const end_time = document.getElementById('add-block-end').value || null;
+          if (!title || !block_date) return;
+          const btn = document.getElementById('add-block-submit');
+          btn.disabled = true;
+          try {
+            const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "add_block", title, block_date, scheduled_time, end_time }),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            overlay.style.display = 'none';
+            await refreshWeekView();
+          } catch (err) {
+            console.error("Failed to add block:", err);
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      }
+
+      document.getElementById('add-block-title').value = '';
+      document.getElementById('add-block-date').value = prefilledDate || '';
+      document.getElementById('add-block-start').value = '';
+      document.getElementById('add-block-end').value = '';
+      overlay.style.display = 'flex';
+      setTimeout(() => document.getElementById('add-block-title').focus(), 50);
     }
 
     async function addRightNowItem(event) {
@@ -1053,7 +1211,10 @@
 
           return `
           <div class="day-column ${isToday ? "is-today" : ""}">
-            <div class="day-header">${label}</div>
+            <div class="day-header">
+              <span>${label}</span>
+              <button class="day-add-btn" data-date="${dateStr}" title="Add block">+</button>
+            </div>
             <div class="flexible-list">${flexibleHtml}</div>
             <div class="day-timeline" style="height:${timelineHeight}px;">${timedHtml}</div>
           </div>`;
@@ -1075,6 +1236,11 @@
           if (!chip) return;
           e.preventDefault();
           showBlockDeletePopup(e.clientX, e.clientY, chip.dataset.blockId, chip.dataset.blockTitle, chip);
+        });
+        container.addEventListener('click', (e) => {
+          const btn = e.target.closest('.day-add-btn');
+          if (!btn) return;
+          showAddBlockModal(btn.dataset.date);
         });
       }
     }
