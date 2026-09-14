@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
   const currentBlock = await getCurrentBlock();
   const blockLine = currentBlock ? `▶️ Next up: ${currentBlock.title}\n\n` : "";
   const motivationLine = await getMotivationLine();
-  const fullMessage = `${blockLine}💭 ${motivationLine}`;
+  const fullMessage = `${blockLine}💭 ${motivationLine}\n\n💧 Log your water in the dashboard`;
 
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
