@@ -509,9 +509,52 @@
 
   function renderSadhanaCard() {
     const { card, body } = makeCard("Sadhana");
-    ["Prayer", "Meditation", "Self-healing", "Yoga"].forEach(m =>
+    ["Prayer", "Meditation", "Self-healing"].forEach(m =>
       body.appendChild(makeNumericRow("Sadhana", m, "min"))
     );
+    return card;
+  }
+
+  function renderAsanasCard() {
+    const { card, body } = makeCard("Asanas");
+    const asanas = Object.keys(progressData["Asanas"] || {});
+
+    asanas.forEach(m => body.appendChild(makeNumericRow("Asanas", m, "sec")));
+
+    const addRow = document.createElement("div");
+    addRow.className = "add-metric-row";
+    const nameIn = document.createElement("input");
+    nameIn.type = "text"; nameIn.className = "add-metric-input"; nameIn.placeholder = "Asana name…";
+    const valIn = document.createElement("input");
+    valIn.type = "number"; valIn.className = "metric-input"; valIn.placeholder = "0"; valIn.min = "0";
+    const secLabel = document.createElement("span");
+    secLabel.className = "metric-unit"; secLabel.textContent = "sec";
+    const addBtn = document.createElement("button");
+    addBtn.className = "log-btn"; addBtn.textContent = "Log";
+    addBtn.addEventListener("click", async () => {
+      const name = nameIn.value.trim();
+      const val  = parseFloat(valIn.value);
+      if (!name || isNaN(val) || val < 0) return;
+      addBtn.disabled = true;
+      try {
+        await logEntry("Asanas", name, val, "sec");
+        nameIn.value = ""; valIn.value = "";
+        addRow.style.display = "none";
+        renderLogForms();
+      } catch (err) { console.error(err); }
+      addBtn.disabled = false;
+    });
+    addRow.append(nameIn, valIn, secLabel, addBtn);
+    body.appendChild(addRow);
+
+    const trigger = document.createElement("button");
+    trigger.className = "add-trigger-btn"; trigger.textContent = "+ Add asana";
+    trigger.addEventListener("click", () => {
+      const showing = addRow.style.display === "flex";
+      addRow.style.display = showing ? "none" : "flex";
+      if (!showing) nameIn.focus();
+    });
+    body.appendChild(trigger);
     return card;
   }
 
@@ -721,6 +764,7 @@
     container.innerHTML = "";
     [
       renderSadhanaCard(),
+      renderAsanasCard(),
       renderWorkoutCard(),
       renderCleaningCard(),
       renderPlantsCard(),
