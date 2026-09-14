@@ -5,7 +5,7 @@
 // rewritten to text/plain), so the API/UI split lives here instead.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { markListItemDoneById, markBlockDoneById, deleteListItemById, createListItem, deleteCategory, deleteBlockById, deleteBlockRecurring, addBlock, addRecurringBlock } from "../_shared/db.ts";
+import { markListItemDoneById, markBlockDoneById, deleteListItemById, createListItem, deleteCategory, deleteBlockById, deleteBlockRecurring, addBlock, addRecurringBlock, addProgressEntry } from "../_shared/db.ts";
 
 const PROGRESS_ACCESS_TOKEN = Deno.env.get("PROGRESS_ACCESS_TOKEN")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -175,6 +175,27 @@ Deno.serve(async (req) => {
           body.block_date,
           body.scheduled_time ?? null,
           body.end_time ?? null,
+        );
+        return new Response(JSON.stringify({ ok: true, id: result.id }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
+      if (action === "add_progress_entry") {
+        const { metric_name, value, unit } = body;
+        if (!category || !metric_name || value === undefined || value === null) {
+          return new Response(JSON.stringify({ error: "missing category, metric_name, or value" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+          });
+        }
+        const result = await addProgressEntry(
+          supabase,
+          category.trim(),
+          metric_name.trim(),
+          Number(value),
+          unit?.trim() ?? null,
         );
         return new Response(JSON.stringify({ ok: true, id: result.id }), {
           status: 200,

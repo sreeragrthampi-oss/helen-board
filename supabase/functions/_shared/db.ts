@@ -189,6 +189,22 @@ export async function addRecurringBlock(
   return { id: recurringId };
 }
 
+export async function addProgressEntry(
+  supabase: SupabaseClient,
+  category: string,
+  metric_name: string,
+  value: number,
+  unit: string | null,
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("progress_entries")
+    .insert({ category, metric_name, value, unit, entry_date: getDateIST() })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id };
+}
+
 export async function addBlock(
   supabase: SupabaseClient,
   title: string,

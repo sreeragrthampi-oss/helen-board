@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>helen — track</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card-bg: #1a1d27;
+    --text: #e5e7eb;
+    --text-dim: #9ca3af;
+    --accent: #6366f1;
+    --border: #2a2e3a;
+    --danger: #f87171;
+    --success: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .page-nav {
+    display: flex;
+    gap: 4px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card-bg);
+  }
+  .nav-link {
+    text-decoration: none;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-weight: 500;
+  }
+  .nav-link:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .nav-link.active { color: var(--accent); background: rgba(99,102,241,0.1); }
+  .page-content { padding: 20px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 24px; }
+  h2.section-title {
+    font-size: 1.1rem;
+    margin: 28px 0 12px;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+  h3.category-title {
+    font-size: 0.95rem;
+    margin: 20px 0 8px;
+    color: var(--text);
+    opacity: 0.85;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h3.category-title:first-child { margin-top: 4px; }
+  .category-title::before {
+    content: "";
+    width: 3px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 2px;
+    display: inline-block;
+  }
+  .empty-state, .loading-state { color: var(--text-dim); font-size: 0.9rem; font-style: italic; }
+  .error-state { color: var(--danger); font-size: 0.9rem; }
+
+  /* Log grid */
+  .log-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+  }
+  .log-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .log-card-header {
+    padding: 10px 16px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+    background: rgba(99,102,241,0.06);
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.75rem;
+  }
+  .log-card-body { padding: 10px 16px 14px; }
+  .metric-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .metric-row:last-of-type { border-bottom: none; }
+  .metric-name {
+    flex: 1;
+    font-size: 0.87rem;
+    color: var(--text);
+    min-width: 0;
+  }
+  .today-badge {
+    font-size: 0.7rem;
+    color: var(--success);
+    white-space: nowrap;
+    padding: 2px 5px;
+    background: rgba(74,222,128,0.1);
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .metric-input {
+    width: 62px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 7px;
+    font-size: 0.85rem;
+    color: var(--text);
+    outline: none;
+    flex-shrink: 0;
+    -moz-appearance: textfield;
+    text-align: center;
+  }
+  .metric-input::-webkit-inner-spin-button,
+  .metric-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+  .metric-input:focus { border-color: var(--accent); }
+  .metric-unit { font-size: 0.74rem; color: var(--text-dim); flex-shrink: 0; white-space: nowrap; }
+  .unit-select {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    outline: none;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .unit-select:focus { border-color: var(--accent); }
+  .log-btn {
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.76rem;
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .log-btn:hover { opacity: 0.85; }
+  .log-btn:disabled { opacity: 0.4; cursor: default; }
+  .done-btn {
+    background: rgba(74,222,128,0.12);
+    border: 1px solid var(--success);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.76rem;
+    color: var(--success);
+    font-weight: 600;
+    flex-shrink: 0;
+    white-space: nowrap;
+    cursor: default;
+  }
+  .mark-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.76rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-weight: 500;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .mark-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .add-metric-row {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .add-metric-input {
+    flex: 1;
+    min-width: 80px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 0.82rem;
+    color: var(--text);
+    outline: none;
+  }
+  .add-metric-input:focus { border-color: var(--accent); }
+  .add-trigger-btn {
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.76rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    margin-top: 8px;
+    display: block;
+  }
+  .add-trigger-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .book-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+    padding: 6px 0 2px;
+  }
+  .book-select {
+    flex: 1;
+    min-width: 100px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 7px;
+    font-size: 0.82rem;
+    color: var(--text);
+    outline: none;
+    cursor: pointer;
+  }
+  .book-select:focus { border-color: var(--accent); }
+  .book-input {
+    flex: 1;
+    min-width: 100px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 5px 7px;
+    font-size: 0.82rem;
+    color: var(--text);
+    outline: none;
+    display: none;
+  }
+  .book-note { font-size: 0.73rem; color: var(--text-dim); margin-top: 3px; min-height: 1em; }
+
+  /* Accordion */
+  .accordion { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+  .accordion-item {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .accordion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .accordion-header:hover { background: rgba(99,102,241,0.06); }
+  .accordion-title { font-weight: 600; font-size: 0.95rem; }
+  .accordion-meta { color: var(--text-dim); font-size: 0.8rem; margin-top: 2px; }
+  .accordion-chevron { color: var(--text-dim); transition: transform 0.15s ease; font-size: 0.9rem; }
+  .accordion-item.open .accordion-chevron { transform: rotate(180deg); }
+  .accordion-body { display: none; padding: 0 16px 16px; border-top: 1px solid var(--border); }
+  .accordion-item.open .accordion-body { display: block; }
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+  }
+  .stat-box {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+  .stat-value { font-size: 1.1rem; font-weight: 700; }
+  .stat-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .trend-up { color: var(--success); }
+  .trend-down { color: var(--danger); }
+  .trend-flat { color: var(--text-dim); }
+  .consistency-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .consistency-note { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<nav class="page-nav">
+  <a href="/" class="nav-link">📋 Dashboard</a>
+  <a href="/track" class="nav-link active">📊 Track</a>
+</nav>
+<div class="page-content">
+  <h1>Track</h1>
+  <div class="subtitle">Log today's metrics and review trends.</div>
+
+  <h2 class="section-title">Log Today</h2>
+  <div id="log-container" class="loading-state">Loading…</div>
+
+  <h2 class="section-title">Consistency <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(last 7 days)</span></h2>
+  <div id="consistency-container" class="loading-state">Loading…</div>
+
+  <h2 class="section-title">Progress</h2>
+  <div id="progress-container" class="loading-state">Loading…</div>
+</div>
+
+<script>
+  const API_URL = "https://xdqhuimgpmkkfstntiyk.supabase.co/functions/v1/helen-board";
+  const TOKEN = "0FCtR3vVW6zBsU92KJ4lO8MGkwDTaNZA";
+  const TODAY = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+  const DEFAULT_WORKOUT  = ["Squats", "Cossack Squats", "Pushups", "Pullups"];
+  const DEFAULT_CLEANING = ["Car", "Room", "Toilet", "Floor", "Almirah"];
+
+  let progressData = {};
+  let openMetricId  = null;
+  const chartInstances = {};
+
+  // ── helpers ────────────────────────────────────────────────────────────────
+
+  function escapeHtml(s) {
+    const d = document.createElement("div");
+    d.textContent = String(s ?? "");
+    return d.innerHTML;
+  }
+
+  function daysAgo(dateStr) {
+    const then = new Date(dateStr + "T00:00:00");
+    const now  = new Date();
+    now.setHours(0, 0, 0, 0);
+    const d = Math.round((now - then) / 86400000);
+    if (d === 0) return "today";
+    if (d === 1) return "1 day ago";
+    return `${d} days ago`;
+  }
+
+  function getTodayEntries(category, metric_name) {
+    return (progressData[category]?.[metric_name] || []).filter(e => e.entry_date === TODAY);
+  }
+
+  function getTodayTotal(category, metric_name) {
+    return getTodayEntries(category, metric_name).reduce((s, e) => s + e.value, 0);
+  }
+
+  function wasLoggedToday(category, metric_name) {
+    return getTodayEntries(category, metric_name).length > 0;
+  }
+
+  function getLastUnit(category, metric_name) {
+    const entries = progressData[category]?.[metric_name] || [];
+    return entries.findLast?.(e => e.unit)?.unit ?? entries.slice().reverse().find(e => e.unit)?.unit ?? null;
+  }
+
+  // Metric names in `category` that exist in DB but not in `defaults`
+  function getExtraMetrics(category, defaults) {
+    return Object.keys(progressData[category] || {}).filter(m => !defaults.includes(m));
+  }
+
+  // ── logging ────────────────────────────────────────────────────────────────
+
+  async function logEntry(category, metric_name, value, unit) {
+    const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "add_progress_entry", category, metric_name, value: Number(value), unit: unit || null }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Patch local state immediately so today badges reflect the new entry
+    if (!progressData[category]) progressData[category] = {};
+    if (!progressData[category][metric_name]) progressData[category][metric_name] = [];
+    progressData[category][metric_name].push({ entry_date: TODAY, value: Number(value), unit: unit || null });
+  }
+
+  // ── card builders ──────────────────────────────────────────────────────────
+
+  function makeCard(title) {
+    const card = document.createElement("div");
+    card.className = "log-card";
+    const header = document.createElement("div");
+    header.className = "log-card-header";
+    header.textContent = title;
+    card.appendChild(header);
+    const body = document.createElement("div");
+    body.className = "log-card-body";
+    card.appendChild(body);
+    return { card, body };
+  }
+
+  // Generic numeric metric row: name | [today badge] | input | unit | Log
+  function makeNumericRow(category, metric_name, unitLabel, opts = {}) {
+    const { allowUnitSelect = false, unitOptions = [] } = opts;
+    const row = document.createElement("div");
+    row.className = "metric-row";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "metric-name";
+    nameEl.textContent = metric_name;
+    row.appendChild(nameEl);
+
+    if (wasLoggedToday(category, metric_name)) {
+      const badge = document.createElement("span");
+      badge.className = "today-badge";
+      const u = getLastUnit(category, metric_name) || unitLabel || "";
+      badge.textContent = `today: ${getTodayTotal(category, metric_name)}${u ? " " + u : ""}`;
+      row.appendChild(badge);
+    }
+
+    const input = document.createElement("input");
+    input.type = "number";
+    input.className = "metric-input";
+    input.min = "0";
+    input.placeholder = "0";
+    row.appendChild(input);
+
+    let unitEl = null;
+    if (allowUnitSelect && unitOptions.length) {
+      unitEl = document.createElement("select");
+      unitEl.className = "unit-select";
+      unitOptions.forEach(u => {
+        const o = document.createElement("option");
+        o.value = u; o.textContent = u;
+        unitEl.appendChild(o);
+      });
+      // Pre-select the unit that was last used for this metric
+      const lastUnit = getLastUnit(category, metric_name);
+      if (lastUnit) unitEl.value = lastUnit;
+      row.appendChild(unitEl);
+    } else if (unitLabel) {
+      const unitSpan = document.createElement("span");
+      unitSpan.className = "metric-unit";
+      unitSpan.textContent = unitLabel;
+      row.appendChild(unitSpan);
+    }
+
+    const btn = document.createElement("button");
+    btn.className = "log-btn";
+    btn.textContent = "Log";
+    btn.addEventListener("click", async () => {
+      const val = parseFloat(input.value);
+      if (isNaN(val) || val < 0) { input.focus(); return; }
+      const unit = unitEl ? unitEl.value : (unitLabel || null);
+      btn.disabled = true;
+      try {
+        await logEntry(category, metric_name, val, unit);
+        input.value = "";
+        renderLogForms();
+      } catch (err) {
+        console.error("Log failed:", err);
+      }
+      btn.disabled = false;
+    });
+    row.appendChild(btn);
+    return row;
+  }
+
+  // Binary done/not-done row (Cleaning, Plants)
+  function makeDoneRow(category, metric_name) {
+    const row = document.createElement("div");
+    row.className = "metric-row";
+    const nameEl = document.createElement("span");
+    nameEl.className = "metric-name";
+    nameEl.textContent = metric_name;
+    row.appendChild(nameEl);
+
+    if (wasLoggedToday(category, metric_name)) {
+      const btn = document.createElement("button");
+      btn.className = "done-btn";
+      btn.textContent = "✓ Done";
+      row.appendChild(btn);
+    } else {
+      const btn = document.createElement("button");
+      btn.className = "mark-btn";
+      btn.textContent = "Mark done";
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          await logEntry(category, metric_name, 1, null);
+          renderLogForms();
+        } catch (err) {
+          console.error("Log failed:", err);
+          btn.disabled = false;
+        }
+      });
+      row.appendChild(btn);
+    }
+    return row;
+  }
+
+  // ── per-category card renders ──────────────────────────────────────────────
+
+  function renderSadhanaCard() {
+    const { card, body } = makeCard("Sadhana");
+    ["Prayer", "Meditation", "Self-healing", "Yoga"].forEach(m =>
+      body.appendChild(makeNumericRow("Sadhana", m, "min"))
+    );
+    return card;
+  }
+
+  function renderWorkoutCard() {
+    const { card, body } = makeCard("Workout");
+    const extras = getExtraMetrics("Workout", DEFAULT_WORKOUT);
+    [...DEFAULT_WORKOUT, ...extras].forEach(m =>
+      body.appendChild(makeNumericRow("Workout", m, null, { allowUnitSelect: true, unitOptions: ["reps", "sec"] }))
+    );
+
+    // "Add exercise" inline form
+    const addRow = document.createElement("div");
+    addRow.className = "add-metric-row";
+    const nameIn = document.createElement("input");
+    nameIn.type = "text"; nameIn.className = "add-metric-input"; nameIn.placeholder = "Exercise name…";
+    const valIn = document.createElement("input");
+    valIn.type = "number"; valIn.className = "metric-input"; valIn.placeholder = "0"; valIn.min = "0";
+    const unitSel = document.createElement("select");
+    unitSel.className = "unit-select";
+    ["reps","sec"].forEach(u => { const o = document.createElement("option"); o.value = u; o.textContent = u; unitSel.appendChild(o); });
+    const addBtn = document.createElement("button");
+    addBtn.className = "log-btn"; addBtn.textContent = "Log";
+    addBtn.addEventListener("click", async () => {
+      const name = nameIn.value.trim();
+      const val  = parseFloat(valIn.value);
+      if (!name || isNaN(val) || val < 0) return;
+      addBtn.disabled = true;
+      try {
+        await logEntry("Workout", name, val, unitSel.value);
+        nameIn.value = ""; valIn.value = "";
+        addRow.style.display = "none";
+        renderLogForms();
+      } catch (err) { console.error(err); }
+      addBtn.disabled = false;
+    });
+    addRow.append(nameIn, valIn, unitSel, addBtn);
+    body.appendChild(addRow);
+
+    const trigger = document.createElement("button");
+    trigger.className = "add-trigger-btn"; trigger.textContent = "+ Add exercise";
+    trigger.addEventListener("click", () => {
+      const showing = addRow.style.display === "flex";
+      addRow.style.display = showing ? "none" : "flex";
+      if (!showing) nameIn.focus();
+    });
+    body.appendChild(trigger);
+    return card;
+  }
+
+  function renderCleaningCard() {
+    const { card, body } = makeCard("Cleaning");
+    const extras = getExtraMetrics("Cleaning", DEFAULT_CLEANING);
+    [...DEFAULT_CLEANING, ...extras].forEach(m => body.appendChild(makeDoneRow("Cleaning", m)));
+
+    const addRow = document.createElement("div");
+    addRow.className = "add-metric-row";
+    const nameIn = document.createElement("input");
+    nameIn.type = "text"; nameIn.className = "add-metric-input"; nameIn.placeholder = "Area name…";
+    const addBtn = document.createElement("button");
+    addBtn.className = "log-btn"; addBtn.textContent = "Mark done";
+    addBtn.addEventListener("click", async () => {
+      const name = nameIn.value.trim();
+      if (!name) return;
+      addBtn.disabled = true;
+      try {
+        await logEntry("Cleaning", name, 1, null);
+        nameIn.value = "";
+        addRow.style.display = "none";
+        renderLogForms();
+      } catch (err) { console.error(err); }
+      addBtn.disabled = false;
+    });
+    addRow.append(nameIn, addBtn);
+    body.appendChild(addRow);
+
+    const trigger = document.createElement("button");
+    trigger.className = "add-trigger-btn"; trigger.textContent = "+ Add area";
+    trigger.addEventListener("click", () => {
+      const showing = addRow.style.display === "flex";
+      addRow.style.display = showing ? "none" : "flex";
+      if (!showing) nameIn.focus();
+    });
+    body.appendChild(trigger);
+    return card;
+  }
+
+  function renderPlantsCard() {
+    const { card, body } = makeCard("Plants");
+    body.appendChild(makeDoneRow("Plants", "Watered"));
+    return card;
+  }
+
+  function renderNotesCard() {
+    const { card, body } = makeCard("Notes");
+    body.appendChild(makeNumericRow("Notes", "Zettelkasten notes created", "notes"));
+    return card;
+  }
+
+  function renderReadingCard() {
+    const { card, body } = makeCard("Reading");
+
+    // Books are stored as metric_name "Reading: <title>"
+    const bookMetrics = Object.keys(progressData["Reading"] || {}).filter(m => m.startsWith("Reading: "));
+    const bookTitles  = bookMetrics.map(m => m.replace(/^Reading:\s*/, ""));
+
+    const bookRow = document.createElement("div");
+    bookRow.className = "book-row";
+
+    const bookSel = document.createElement("select");
+    bookSel.className = "book-select";
+    bookTitles.forEach(t => {
+      const o = document.createElement("option");
+      o.value = t; o.textContent = t.length > 30 ? t.slice(0, 28) + "…" : t;
+      bookSel.appendChild(o);
+    });
+    const newOpt = document.createElement("option");
+    newOpt.value = "__new__"; newOpt.textContent = bookTitles.length ? "＋ New book…" : "New book…";
+    bookSel.appendChild(newOpt);
+    if (!bookTitles.length) bookSel.value = "__new__";
+    bookRow.appendChild(bookSel);
+
+    const newIn = document.createElement("input");
+    newIn.type = "text"; newIn.className = "book-input"; newIn.placeholder = "Book title…";
+    if (!bookTitles.length) newIn.style.display = "";
+    bookRow.appendChild(newIn);
+
+    const pageIn = document.createElement("input");
+    pageIn.type = "number"; pageIn.className = "metric-input"; pageIn.placeholder = "Page"; pageIn.min = "1";
+    pageIn.style.width = "70px";
+    bookRow.appendChild(pageIn);
+
+    const pgLabel = document.createElement("span");
+    pgLabel.className = "metric-unit"; pgLabel.textContent = "pg";
+    bookRow.appendChild(pgLabel);
+
+    const btn = document.createElement("button");
+    btn.className = "log-btn"; btn.textContent = "Log";
+    bookRow.appendChild(btn);
+
+    bookSel.addEventListener("change", () => {
+      newIn.style.display = bookSel.value === "__new__" ? "" : "none";
+      if (bookSel.value === "__new__") newIn.focus();
+      updateBookNote();
+    });
+
+    const note = document.createElement("div");
+    note.className = "book-note";
+
+    function updateBookNote() {
+      if (bookSel.value === "__new__") { note.textContent = ""; return; }
+      const entries = progressData["Reading"]?.["Reading: " + bookSel.value] || [];
+      if (entries.length) {
+        const last = entries[entries.length - 1];
+        note.textContent = `Last logged: page ${last.value} · ${daysAgo(last.entry_date)}`;
+      } else {
+        note.textContent = "";
+      }
+    }
+    updateBookNote();
+
+    btn.addEventListener("click", async () => {
+      const isNew     = bookSel.value === "__new__";
+      const bookTitle = isNew ? newIn.value.trim() : bookSel.value;
+      const page      = parseInt(pageIn.value);
+      if (!bookTitle) { (isNew ? newIn : bookSel).focus(); return; }
+      if (!page || page < 1) { pageIn.focus(); return; }
+      btn.disabled = true;
+      try {
+        await logEntry("Reading", "Reading: " + bookTitle, page, "pg");
+        pageIn.value = "";
+        if (isNew) newIn.value = "";
+        renderLogForms();
+      } catch (err) { console.error(err); }
+      btn.disabled = false;
+    });
+
+    body.appendChild(bookRow);
+    body.appendChild(note);
+    return card;
+  }
+
+  function renderAnkiCard() {
+    const { card, body } = makeCard("Anki");
+    body.appendChild(makeNumericRow("Anki", "Notes created", "notes"));
+    body.appendChild(makeNumericRow("Anki", "Notes reviewed", "notes"));
+    return card;
+  }
+
+  function renderRomanianCard() {
+    const { card, body } = makeCard("Romanian");
+    body.appendChild(makeNumericRow("Romanian", "Words learned", "words"));
+    body.appendChild(makeNumericRow("Romanian", "Sentences learned", "sentences"));
+    return card;
+  }
+
+  function renderContentCard() {
+    const { card, body } = makeCard("Content");
+    body.appendChild(makeNumericRow("Content", "Long-form video published", "videos"));
+    body.appendChild(makeNumericRow("Content", "Short-form/Reels published", "reels"));
+    body.appendChild(makeNumericRow("Content", "Newsletters published", "issues"));
+    return card;
+  }
+
+  function renderLogForms() {
+    const container = document.getElementById("log-container");
+    container.className = "log-grid";
+    container.innerHTML = "";
+    [
+      renderSadhanaCard(),
+      renderWorkoutCard(),
+      renderCleaningCard(),
+      renderPlantsCard(),
+      renderNotesCard(),
+      renderReadingCard(),
+      renderAnkiCard(),
+      renderRomanianCard(),
+      renderContentCard(),
+    ].forEach(el => container.appendChild(el));
+  }
+
+  // ── Consistency chart ──────────────────────────────────────────────────────
+
+  function flattenMetrics(pd) {
+    const flat = [];
+    for (const [cat, metrics] of Object.entries(pd)) {
+      for (const [metric, entries] of Object.entries(metrics)) {
+        flat.push({ category: cat, metric, entries });
+      }
+    }
+    return flat;
+  }
+
+  function renderConsistency(pd) {
+    const container = document.getElementById("consistency-container");
+    const flat = flattenMetrics(pd);
+    if (!flat.length) {
+      container.innerHTML = `<div class="empty-state">No progress logged yet.</div>`;
+      return;
+    }
+    const cutoff = new Date();
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - 6);
+
+    const counts = flat.map(({ metric, entries }) => ({
+      metric,
+      count: entries.filter(e => new Date(e.entry_date + "T00:00:00") >= cutoff).length,
+    }));
+    counts.sort((a, b) => a.count - b.count || a.metric.localeCompare(b.metric));
+
+    container.innerHTML = `
+      <div class="consistency-card">
+        <div class="consistency-note">Fewest logs first — these are the ones you're neglecting.</div>
+        <div style="height:${Math.max(120, counts.length * 36)}px;">
+          <canvas id="consistency-chart"></canvas>
+        </div>
+      </div>`;
+
+    new Chart(document.getElementById("consistency-chart").getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: counts.map(c => c.metric),
+        datasets: [{
+          label: "Times logged",
+          data: counts.map(c => c.count),
+          backgroundColor: counts.map(c => c.count === 0 ? "#f87171" : "#6366f1"),
+          borderRadius: 4,
+          maxBarThickness: 24,
+        }],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+      },
+    });
+  }
+
+  // ── Progress charts ────────────────────────────────────────────────────────
+
+  function computeStats(entries) {
+    const values = entries.map(e => e.value);
+    const best   = Math.max(...values);
+    const avg    = values.reduce((a, b) => a + b, 0) / values.length;
+    const last   = entries[entries.length - 1];
+    let trend = "flat";
+    if (entries.length >= 2) {
+      const latest   = last.value;
+      const priorAvg = entries.slice(0, -1).reduce((a, b) => a + b.value, 0) / (entries.length - 1);
+      if (latest > priorAvg * 1.05) trend = "up";
+      else if (latest < priorAvg * 0.95) trend = "down";
+    }
+    return { total: entries.length, best, avg: Math.round(avg * 10) / 10, lastDate: last.entry_date, trend };
+  }
+
+  function buildChart(metricId, entries, displayName) {
+    if (chartInstances[metricId]) return;
+    const ctx   = document.getElementById(`chart-${metricId}`).getContext("2d");
+    const units = [...new Set(entries.map(e => e.unit).filter(Boolean))];
+
+    let labels, datasets;
+
+    if (units.length > 1) {
+      // Collect all dates; build one dataset per unit, null where absent
+      const allDates = [...new Set(entries.map(e => e.entry_date))].sort();
+      labels = allDates;
+      const palette = ["#6366f1", "#f59e0b", "#4ade80", "#f87171"];
+      datasets = units.map((u, i) => {
+        const byDate = {};
+        entries.filter(e => e.unit === u).forEach(e => { byDate[e.entry_date] = e.value; });
+        return {
+          label: u,
+          data: allDates.map(d => byDate[d] ?? null),
+          borderColor: palette[i % palette.length],
+          backgroundColor: palette[i % palette.length] + "22",
+          tension: 0.3,
+          fill: false,
+          pointRadius: 4,
+          spanGaps: false,
+        };
+      });
+    } else {
+      labels = entries.map(e => e.entry_date);
+      datasets = [{
+        label: displayName,
+        data: entries.map(e => e.value),
+        borderColor: "#6366f1",
+        backgroundColor: "rgba(99,102,241,0.1)",
+        tension: 0.3,
+        fill: true,
+        pointRadius: 4,
+      }];
+    }
+
+    chartInstances[metricId] = new Chart(ctx, {
+      type: "line",
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: units.length > 1 } },
+        scales: { y: { beginAtZero: true } },
+      },
+    });
+  }
+
+  function renderProgress(pd) {
+    const container = document.getElementById("progress-container");
+    const categories = Object.keys(pd).sort();
+    if (!categories.length) {
+      container.innerHTML = `<div class="empty-state">No progress logged yet.</div>`;
+      return;
+    }
+    container.innerHTML = "";
+
+    categories.forEach(category => {
+      const heading = document.createElement("h3");
+      heading.className = "category-title";
+      heading.textContent = category;
+      container.appendChild(heading);
+
+      const accordion = document.createElement("div");
+      accordion.className = "accordion";
+      container.appendChild(accordion);
+
+      Object.keys(pd[category]).sort().forEach(metric => {
+        const entries = pd[category][metric];
+        const unit    = entries.find(e => e.unit)?.unit || "";
+        const stats   = computeStats(entries);
+        // Strip "Reading: " prefix for display
+        const displayName = (category === "Reading" && metric.startsWith("Reading: "))
+          ? metric.replace(/^Reading:\s*/, "")
+          : metric;
+        const metricId = `${category}-${metric}`.replace(/[^a-z0-9]/gi, "-");
+
+        const trendSym = stats.trend === "up" ? "▲" : stats.trend === "down" ? "▼" : "●";
+        const trendCls = `trend-${stats.trend}`;
+
+        const item = document.createElement("div");
+        item.className = "accordion-item";
+        item.dataset.metricId = metricId;
+        item.innerHTML = `
+          <div class="accordion-header">
+            <div>
+              <div class="accordion-title">${escapeHtml(displayName)}</div>
+              <div class="accordion-meta">Logged ${stats.total}× · last ${daysAgo(stats.lastDate)}</div>
+            </div>
+            <div class="accordion-chevron">▾</div>
+          </div>
+          <div class="accordion-body">
+            <div class="stats-row">
+              <div class="stat-box"><div class="stat-value">${stats.total}</div><div class="stat-label">Logs</div></div>
+              <div class="stat-box"><div class="stat-value">${stats.best}${unit ? " " + escapeHtml(unit) : ""}</div><div class="stat-label">Best</div></div>
+              <div class="stat-box"><div class="stat-value">${stats.avg}${unit ? " " + escapeHtml(unit) : ""}</div><div class="stat-label">Average</div></div>
+              <div class="stat-box"><div class="stat-value ${trendCls}">${trendSym}</div><div class="stat-label">Trend</div></div>
+            </div>
+            <div style="height:220px;"><canvas id="chart-${metricId}"></canvas></div>
+          </div>`;
+
+        item.querySelector(".accordion-header").addEventListener("click", () => {
+          if (openMetricId === metricId) {
+            item.classList.remove("open");
+            openMetricId = null;
+            return;
+          }
+          document.querySelectorAll(".accordion-item").forEach(el => el.classList.remove("open"));
+          item.classList.add("open");
+          openMetricId = metricId;
+          buildChart(metricId, entries, displayName);
+        });
+
+        accordion.appendChild(item);
+      });
+    });
+  }
+
+  // ── bootstrap ──────────────────────────────────────────────────────────────
+
+  async function loadData() {
+    try {
+      const res = await fetch(`${API_URL}?token=${encodeURIComponent(TOKEN)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      progressData = data.progress || {};
+      renderLogForms();
+      renderConsistency(progressData);
+      renderProgress(progressData);
+    } catch (err) {
+      console.error("Load failed:", err);
+      document.getElementById("log-container").innerHTML = `<div class="error-state">Failed to load — check console.</div>`;
+    }
+  }
+
+  loadData();
+</script>
+</body>
+</html>
