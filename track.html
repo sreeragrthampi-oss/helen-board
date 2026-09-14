@@ -313,7 +313,10 @@
   <h2 class="section-title">Log Today</h2>
   <div id="log-container" class="loading-state">Loading…</div>
 
-  <h2 class="section-title">Consistency <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(last 7 days)</span></h2>
+  <h2 class="section-title">This Week <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(by category)</span></h2>
+  <div id="category-consistency-container" class="loading-state">Loading…</div>
+
+  <h2 class="section-title">Consistency <span style="color:var(--text-dim);font-weight:normal;font-size:0.75rem;">(by metric, last 7 days)</span></h2>
   <div id="consistency-container" class="loading-state">Loading…</div>
 
   <h2 class="section-title">Progress</h2>
@@ -729,6 +732,57 @@
     ].forEach(el => container.appendChild(el));
   }
 
+  // ── Category consistency chart ─────────────────────────────────────────────
+
+  function renderCategoryConsistency(pd) {
+    const container = document.getElementById("category-consistency-container");
+    const categories = Object.keys(pd);
+    if (!categories.length) {
+      container.innerHTML = `<div class="empty-state">No progress logged yet.</div>`;
+      return;
+    }
+
+    const cutoff = new Date();
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - 6);
+
+    const counts = categories.map(cat => ({
+      category: cat,
+      count: Object.values(pd[cat]).reduce((sum, entries) =>
+        sum + entries.filter(e => new Date(e.entry_date + "T00:00:00") >= cutoff).length, 0),
+    }));
+    counts.sort((a, b) => a.count - b.count || a.category.localeCompare(b.category));
+
+    container.innerHTML = `
+      <div class="consistency-card">
+        <div class="consistency-note">Fewest logs first — these are the categories you're neglecting.</div>
+        <div style="height:${Math.max(80, counts.length * 36)}px;">
+          <canvas id="category-consistency-chart"></canvas>
+        </div>
+      </div>`;
+
+    new Chart(document.getElementById("category-consistency-chart").getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: counts.map(c => c.category),
+        datasets: [{
+          label: "Times logged",
+          data: counts.map(c => c.count),
+          backgroundColor: counts.map(c => c.count === 0 ? "#f87171" : "#6366f1"),
+          borderRadius: 4,
+          maxBarThickness: 24,
+        }],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+      },
+    });
+  }
+
   // ── Consistency chart ──────────────────────────────────────────────────────
 
   function flattenMetrics(pd) {
@@ -935,6 +989,7 @@
       const data = await res.json();
       progressData = data.progress || {};
       renderLogForms();
+      renderCategoryConsistency(progressData);
       renderConsistency(progressData);
       renderProgress(progressData);
     } catch (err) {
