@@ -394,6 +394,24 @@
   }
   .add-category-form button[type="submit"]:hover { opacity: 0.85; }
   .new-category-card { border-style: dashed; opacity: 0.7; }
+  .page-nav {
+    display: flex;
+    gap: 4px;
+    margin: -20px -20px 20px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card-bg);
+  }
+  .nav-link {
+    text-decoration: none;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-weight: 500;
+  }
+  .nav-link:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .nav-link.active { color: var(--accent); background: rgba(99,102,241,0.1); }
   .new-category-card:hover { opacity: 1; }
   .block-delete-popup {
     position: fixed;
@@ -596,6 +614,10 @@
 </style>
 </head>
 <body>
+  <nav class="page-nav">
+    <a href="/" class="nav-link active">📋 Dashboard</a>
+    <a href="/track" class="nav-link">📊 Track</a>
+  </nav>
   <h1>helen-board</h1>
   <div class="subtitle">Read-only. Add or edit through Helen via Telegram.</div>
 
