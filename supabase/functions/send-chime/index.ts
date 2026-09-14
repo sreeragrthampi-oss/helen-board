@@ -13,22 +13,6 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-const CHECKLIST = `🔔 Reset check:
-1. Check helen-board
-2. Mute/unmute phone as needed
-3. Drink water
-4. Pray a little
-5. Charge gadgets — phone, earbuds, scooter
-6. Clean the room a little
-7. Blocks check, tick
-8. Check Google Tasks
-9. Journal the last hour in a few words, thriller, revise it
-10. Any fleeting notes? stories? Capture them now
-11. Momentum, small wins
-12. 90 days, sacrifices
-13. Slow
-
-Keep the momentum. Move with urgency. Stay fluid. Win the next hour — small wins matter.`;
 
 Deno.serve(async (req) => {
   const provided = req.headers.get("X-Cron-Secret");
@@ -37,9 +21,9 @@ Deno.serve(async (req) => {
   }
 
   const currentBlock = await getCurrentBlock();
-  const blockLine = currentBlock ? `\n\n▶️ Next up: ${currentBlock.title}` : "";
+  const blockLine = currentBlock ? `▶️ Next up: ${currentBlock.title}\n\n` : "";
   const motivationLine = await getMotivationLine();
-  const fullMessage = CHECKLIST + blockLine + `\n\n💭 ${motivationLine}`;
+  const fullMessage = `${blockLine}💭 ${motivationLine}`;
 
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
@@ -62,16 +46,21 @@ Deno.serve(async (req) => {
 });
 
 const THEMES = [
-  "Football underdog spirit: a small team playing without fear of bigger opponents, enjoying the game itself, momentum and small wins mattering more than big glory, urgency, fluidity, and team chemistry through hard work.",
-  "Savoring the ordinary: living this day as if given a second chance to notice the small things most people rush past.",
-  "Gamifying the grind: staying playful and smiling even during hard work, loving deadlines, finding thrill in small wins and just making it to the end of the day with realistic goals — live to fight another day.",
-  "The only real failure is quitting or restarting a streak entirely. The goal isn't a perfect streak — it's someone who, months from now, never fully stopped. Drifted, returned, drifted, returned, and kept going. No fresh start needed. Just the next clean action, ball in hand.",
-  "The real miracle isn't something dramatic — it's a single parent working two jobs who still makes it to their kid's practice, or someone working a day job while studying at night. Ordinary persistence under real constraints is the actual miracle.",
-  "An identity statement: 'I am someone who shows up for this, even on bad days, even if it's just 10 minutes.' Small, quiet, consistent identity over intensity.",
+  "Preparation: working hard before pressure forces you to, preparing beyond what's required, practicing until skills become automatic rather than something you have to think about under stress.",
+  "Deliberate weakness practice: most people practice what already makes them feel competent; real improvement comes from scheduling dedicated time for the skill you keep avoiding.",
+  "Raising the bar after wins: success is dangerous when it convinces you current effort is enough — after something goes well, ask what would make the next version noticeably better.",
+  "Resilience: it's not about how hard life hits, it's about how much you can take and keep moving forward.",
+  "Life built around chosen values: some people build their life around one thing by default; a deliberate life is built around what you actually choose — spirituality, learning, teaching, helping others, relationships.",
+  "Living fully / not fearing time passing: the risk isn't getting older, it's not having lived. You never know what's coming, at any age.",
+  "Self-respect through order: an organized, clean environment reflects and reinforces internal discipline.",
 ];
 
 async function getMotivationLine(): Promise<string> {
   const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+  const format = Math.random() < 0.5 ? "quote" : "question";
+  const formatInstruction = format === "quote"
+    ? "Write it as a short punchy statement (1-2 sentences)."
+    : "Write it as a short pointed question that makes the reader honestly check in with themselves for a moment.";
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -86,7 +75,7 @@ async function getMotivationLine(): Promise<string> {
         messages: [
           {
             role: "user",
-            content: `Write ONE short, original motivational message (2-3 sentences max) capturing this spirit, in your own words — do not quote or reference any specific movie, book, or song by name, just channel the underlying idea:\n\n${theme}\n\nOutput only the message itself, no preamble, no quotation marks.`,
+            content: `Generate an original line in the spirit of this theme — treat the description only as a tone/register reference, never reuse its phrasing verbatim:\n\nTheme: ${theme}\n\n${formatInstruction}\n\nOutput only the line itself, no preamble, no quotation marks.`,
           },
         ],
       }),

@@ -77,6 +77,7 @@ Deno.serve(async (req) => {
         block_date: dateStr,
         scheduled_time: routine.scheduled_time,
         end_time: routine.end_time,
+        recurring_block_id: routine.id,
       });
 
       if (insertError) {

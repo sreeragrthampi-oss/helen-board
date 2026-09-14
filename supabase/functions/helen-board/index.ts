@@ -5,7 +5,7 @@
 // rewritten to text/plain), so the API/UI split lives here instead.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { markListItemDoneById, markBlockDoneById, deleteListItemById, createListItem, deleteCategory, deleteBlockById, deleteBlockRecurring } from "../_shared/db.ts";
+import { markListItemDoneById, markBlockDoneById, deleteListItemById, createListItem, deleteCategory, deleteBlockById, deleteBlockRecurring, addBlock, addRecurringBlock } from "../_shared/db.ts";
 
 const PROGRESS_ACCESS_TOKEN = Deno.env.get("PROGRESS_ACCESS_TOKEN")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -142,6 +142,41 @@ Deno.serve(async (req) => {
         }
         const result = await deleteBlockRecurring(supabase, id);
         return new Response(JSON.stringify({ ok: true, wasRecurring: result.wasRecurring }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
+      if (action === "add_recurring_block") {
+        const { scheduled_time, end_time, days_of_week } = body;
+        if (!title || !scheduled_time || !Array.isArray(days_of_week) || days_of_week.length === 0) {
+          return new Response(JSON.stringify({ error: "missing title, scheduled_time, or days_of_week" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+          });
+        }
+        const result = await addRecurringBlock(supabase, title.trim(), scheduled_time, end_time ?? null, days_of_week);
+        return new Response(JSON.stringify({ ok: true, id: result.id }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
+      if (action === "add_block") {
+        if (!title || !body.block_date) {
+          return new Response(JSON.stringify({ error: "missing title or block_date" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+          });
+        }
+        const result = await addBlock(
+          supabase,
+          title.trim(),
+          body.block_date,
+          body.scheduled_time ?? null,
+          body.end_time ?? null,
+        );
+        return new Response(JSON.stringify({ ok: true, id: result.id }), {
           status: 200,
           headers: { "Content-Type": "application/json", ...CORS_HEADERS },
         });
